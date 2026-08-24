@@ -1,409 +1,127 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 
-type UserState = "guest" | "no-credit" | "credits" | "unlocked";
-type View = "product" | "orders" | "assets";
-type Modal =
-  | "none"
-  | "auth"
-  | "auth-success"
-  | "redeem"
-  | "package"
-  | "checkout"
-  | "payment"
-  | "success"
-  | "download-blocked";
+type Page = "home" | "search" | "product" | "free" | "pricing" | "cart" | "assets";
+type UserMode = "guest" | "basic" | "pro";
+type ModelType = "SketchUp" | "3ds Max";
+type Model = { id: number; title: string; type: ModelType; category: string; image: string; checked: boolean; free?: boolean; version?: string; renderer?: string; size: string };
 
-const productImage =
-  "https://d2r9epyceweg5n.cloudfront.net/stores/002/234/113/products/c5369a37-4c38-438f-8a0a-0e7ac85674c41-dd219a9f5164bb09eb16712374590853-1024-1024.jpeg";
-const alternateImages = [
-  productImage,
-  "https://cdn.shopify.com/s/files/1/0871/2798/2406/files/172261ce-9339-41d3-8c79-9002afbf330b.jpg?v=1774273106",
-  "https://amazingarchitecture.com/storage/files/4049/architecture-firm/kvadrat%20architects/lake-house/lake-house-shchuchinsk-kvadrat-architects-6.jpg",
+const models: Model[] = [
+  { id: 1, title: "Lunaro Modular Sofa", type: "3ds Max", category: "Sofas", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=88", checked: true, version: "2021", renderer: "Corona", size: "286 MB" },
+  { id: 2, title: "Noma Lounge Chair", type: "SketchUp", category: "Chairs", image: "https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&w=1200&q=88", checked: true, version: "2020", size: "42 MB" },
+  { id: 3, title: "Aster Pendant Light", type: "3ds Max", category: "Lighting", image: "https://images.unsplash.com/photo-1540932239986-30128078f3c5?auto=format&fit=crop&w=1200&q=88", checked: true, version: "2022", renderer: "V-Ray", size: "68 MB" },
+  { id: 4, title: "Olive Tree No. 08", type: "3ds Max", category: "Plants", image: "https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=1200&q=88", checked: true, version: "2020", renderer: "Corona", size: "214 MB" },
+  { id: 5, title: "Courtyard House 27", type: "SketchUp", category: "Architecture", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=88", checked: true, version: "2021", size: "119 MB" },
+  { id: 6, title: "Solace Dining Collection", type: "3ds Max", category: "Dining", image: "https://images.unsplash.com/photo-1617806118233-18e1de247200?auto=format&fit=crop&w=1200&q=88", checked: true, free: true, version: "2021", renderer: "Corona", size: "175 MB" },
+  { id: 7, title: "Kanso Platform Bed", type: "SketchUp", category: "Beds", image: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=88", checked: true, free: true, version: "2019", size: "34 MB" },
+  { id: 8, title: "Milo Travertine Table", type: "3ds Max", category: "Tables", image: "https://images.unsplash.com/photo-1533090481720-856c6e3c1fdc?auto=format&fit=crop&w=1200&q=88", checked: false, version: "2020", renderer: "V-Ray", size: "96 MB" },
+  { id: 9, title: "Minimal Kitchen System", type: "SketchUp", category: "Kitchens", image: "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1200&q=88", checked: true, free: true, version: "2021", size: "71 MB" },
+  { id: 10, title: "Atelier Workspace Set", type: "3ds Max", category: "Office", image: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=88", checked: true, version: "2022", renderer: "Corona", size: "302 MB" },
+  { id: 11, title: "Mediterranean Arch Set", type: "SketchUp", category: "Architecture", image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=88", checked: true, version: "2020", size: "88 MB" },
+  { id: 12, title: "Botanical Planter Series", type: "3ds Max", category: "Plants", image: "https://images.unsplash.com/photo-1493552152660-f915ab47ae9d?auto=format&fit=crop&w=1200&q=88", checked: true, free: true, version: "2021", renderer: "Corona", size: "127 MB" },
 ];
 
-const packageOptions = [
-  { id: "basic", name: "Native File", meta: "3ds Max 2016 · 32.86 MB", price: "$0.40", old: "$3.00" },
-  { id: "creator", name: "Creator Pack", meta: "MAX · FBX · OBJ · Textures", price: "$0.80", old: "$6.00", recommended: true },
-  { id: "universal", name: "Universal Pack", meta: "All formats · Materials · Support", price: "$1.20", old: "$8.00" },
+const collections = [
+  { title: "Warm Minimalism", count: 184, image: models[0].image }, { title: "Architectural Essentials", count: 96, image: models[4].image },
+  { title: "Quiet Workspaces", count: 132, image: models[9].image }, { title: "Natural Living", count: 208, image: models[3].image },
 ];
 
-export default function Home() {
-  const [userState, setUserState] = useState<UserState>("guest");
-  const [view, setView] = useState<View>("product");
-  const [modal, setModal] = useState<Modal>("none");
-  const [imageIndex, setImageIndex] = useState(0);
-  const [liked, setLiked] = useState(false);
-  const [emailStep, setEmailStep] = useState<"email" | "code">("email");
-  const [selectedPackage, setSelectedPackage] = useState("creator");
-  const [payment, setPayment] = useState("antom");
-  const [downloadBlocked, setDownloadBlocked] = useState(false);
-  const [seconds, setSeconds] = useState(15 * 60);
+const todayFreeModels: Model[] = Array.from({ length: 40 }, (_, index) => ({
+  ...models[index % models.length],
+  id: 100 + index,
+  free: true,
+  type: index < 20 ? "SketchUp" : "3ds Max",
+  title: `${models[index % models.length].title} ${String(index + 1).padStart(2, "0")}`,
+}));
+const catalog = [...models, ...todayFreeModels];
 
-  useEffect(() => {
-    if (view !== "orders" || seconds <= 0) return;
-    const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
-    return () => window.clearInterval(timer);
-  }, [view, seconds]);
-
-  const packageItem = packageOptions.find((item) => item.id === selectedPackage)!;
-  const time = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  const isUnlocked = userState === "unlocked";
-
-  function startPurchase() {
-    if (userState === "guest") setModal("auth");
-    else if (userState === "credits") setModal("redeem");
-    else if (userState === "unlocked") finishDownload();
-    else setModal("package");
-  }
-
-  function finishDownload() {
-    setModal(downloadBlocked ? "download-blocked" : "success");
-  }
-
-  function changeView(next: View) {
-    setView(next);
-    setModal("none");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function resetPrototype() {
-    setView("product");
-    setModal("none");
-    setUserState("guest");
-    setEmailStep("email");
-    setSelectedPackage("creator");
-    setSeconds(15 * 60);
-  }
-
-  return (
-    <main>
-      <header className="site-header">
-        <button className="brand" onClick={() => changeView("product")}>ARCHZZ</button>
-        <nav aria-label="Primary navigation">
-          <button onClick={() => changeView("product")}>SketchUp Models</button>
-          <button onClick={() => changeView("product")}>3ds Max Models</button>
-          <button onClick={() => changeView("product")}>AI Image Studio</button>
-        </nav>
-        <div className="header-actions">
-          <button className="round-button" aria-label="Search">⌕</button>
-          {userState === "guest" ? (
-            <button className="account-button" onClick={() => setModal("auth")}>Log in</button>
-          ) : (
-            <button className="account-button" onClick={() => changeView("assets")}>Mia</button>
-          )}
-          <button className="round-button" onClick={() => changeView("orders")} aria-label="Orders">▣</button>
-        </div>
-      </header>
-
-      {view === "product" && (
-        <>
-          <div className="search-row">
-            <span>All assets</span>
-            <input aria-label="Search assets" placeholder="Search 3D models" />
-            <button aria-label="Submit search">Search</button>
-          </div>
-
-          <div className="crumbs">Home / Decorations / Sculpture</div>
-          <section className="product-shell">
-            <div className="gallery">
-              <div className="thumbnail-list">
-                {alternateImages.map((image, index) => (
-                  <button className={`thumb ${imageIndex === index ? "active" : ""}`} onClick={() => setImageIndex(index)} key={image}>
-                    <img src={image} alt={`Product view ${index + 1}`} />
-                  </button>
-                ))}
-              </div>
-              <div className="main-image">
-                <img src={alternateImages[imageIndex]} alt="Modern abstract sculpture in a styled interior" />
-                <button className="gallery-arrow left" onClick={() => setImageIndex((imageIndex + 2) % 3)} aria-label="Previous image">‹</button>
-                <button className="gallery-arrow right" onClick={() => setImageIndex((imageIndex + 1) % 3)} aria-label="Next image">›</button>
-                <span className="image-count">{imageIndex + 1} / {alternateImages.length}</span>
-              </div>
-            </div>
-
-            <div className="product-info">
-              <div className="eyebrow">3DS MAX MODEL</div>
-              <h1>Modern Wave Sculpture &amp; Display Set</h1>
-              <div className="trust-line">
-                <a href="#author">by Studio Forma</a>
-                <span className="rating">★ 4.8 <small>(126)</small></span>
-                <span>1,842 downloads</span>
-              </div>
-
-              {!isUnlocked && (
-                <>
-                  <div className="price-row">
-                    <span className="sale-price">$0.80</span>
-                    <span className="old-price">$6.00</span>
-                    <span className="discount">87% OFF</span>
-                  </div>
-                  <p className="license-summary">Commercial license included · Secure checkout</p>
-                </>
-              )}
-              {isUnlocked && <div className="owned-badge">✓ Owned · Available in My Assets</div>}
-
-              <div className="quick-facts">
-                <div><span>Software</span><strong>3ds Max 2016+</strong></div>
-                <div><span>Formats</span><strong>MAX · FBX · OBJ</strong></div>
-                <div><span>File size</span><strong>32.86 MB</strong></div>
-                <div><span>Render</span><strong>V-Ray 5</strong></div>
-              </div>
-
-              {!isUnlocked && (
-                <div className="credit-note">
-                  <div className="credit-icon">C</div>
-                  <div>
-                    <strong>Unlock permanently with 1 Credit</strong>
-                    <p>Re-download anytime from My Assets. No extra charge.</p>
-                  </div>
-                  {userState !== "guest" && <span className="balance">Balance: {userState === "credits" ? 3 : 0}</span>}
-                </div>
-              )}
-
-              {!isUnlocked && <div className="cta-price"><span>You pay today</span><strong>$0.80</strong></div>}
-              <div className="cta-row">
-                <button className="primary" onClick={startPurchase}>{isUnlocked ? "DOWNLOAD AGAIN" : "GET IT NOW"}</button>
-                <button className={`favorite ${liked ? "selected" : ""}`} onClick={() => setLiked(!liked)} aria-label="Save model">{liked ? "♥" : "♡"}</button>
-              </div>
-              <p className="safe-copy">Instant access · Files stay in My Assets · 14-day support</p>
-            </div>
-          </section>
-
-          <section className="details-grid">
-            <article>
-              <p className="section-kicker">WHAT’S INCLUDED</p>
-              <h2>Everything you need to start rendering</h2>
-              <ul className="included-list">
-                <li><span>Native scene</span><strong>3ds Max 2016</strong></li>
-                <li><span>Exchange files</span><strong>FBX · OBJ</strong></li>
-                <li><span>Supporting files</span><strong>Textures · Materials · Previews</strong></li>
-              </ul>
-            </article>
-            <article id="license">
-              <p className="section-kicker">COMMERCIAL LICENSE</p>
-              <h2>Clear usage rights</h2>
-              <p>Use in client projects, visualizations and marketing renders. Redistribution or resale of source files is prohibited.</p>
-              <a href="#license">View full license →</a>
-            </article>
-          </section>
-        </>
-      )}
-
-      {view === "orders" && (
-        <section className="account-page">
-          <AccountNav active="orders" onNavigate={changeView} />
-          <div className="account-content">
-            <div className="page-heading"><div><p className="section-kicker">MY ACCOUNT</p><h1>Orders</h1></div><p>Resume interrupted payments without losing your item.</p></div>
-            <div className="order-card pending">
-              <img src={productImage} alt="Modern Wave Sculpture" />
-              <div className="order-main"><span className="status-pill">Pending payment</span><h3>Modern Wave Sculpture &amp; Display Set</h3><p>Order #AZ-260819-0482 · Creator Pack</p></div>
-              <div className="order-total"><span>Expires in</span><strong className="timer">{seconds > 0 ? time : "Expired"}</strong><b>$0.80</b></div>
-              <div className="order-actions"><button className="primary small" disabled={seconds === 0} onClick={() => setModal("payment")}>Pay now</button><button className="secondary">View details</button></div>
-            </div>
-            <div className="order-card failed">
-              <img src={alternateImages[1]} alt="Abstract art model" />
-              <div className="order-main"><span className="status-pill">Payment failed</span><h3>Abstract Gallery Objects Vol. 02</h3><p>Your bank declined this payment. Try PayPal or another card.</p></div>
-              <div className="order-total"><span>Aug 18, 2026</span><b>$1.20</b></div>
-              <div className="order-actions"><button className="secondary strong" onClick={() => setModal("payment")}>Retry payment</button></div>
-            </div>
-            <div className="order-card expired">
-              <img src={alternateImages[2]} alt="Metal sculpture model" />
-              <div className="order-main"><span className="status-pill">Expired</span><h3>Metal Sculpture Collection</h3><p>This payment window has ended. Create a new order to continue.</p></div>
-              <div className="order-total"><span>Aug 17, 2026</span><b>$0.60</b></div>
-              <div className="order-actions"><button className="secondary strong" onClick={() => changeView("product")}>Buy again</button></div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {view === "assets" && (
-        <section className="account-page">
-          <AccountNav active="assets" onNavigate={changeView} />
-          <div className="account-content">
-            <div className="page-heading"><div><p className="section-kicker">MY ACCOUNT</p><h1>My Assets</h1></div><p>Purchased and Credit-unlocked models remain available here.</p></div>
-            <div className="asset-grid">
-              <article className="asset-card">
-                <img src={productImage} alt="Modern Wave Sculpture" />
-                <div><span className="owned-tag">Permanently unlocked</span><h3>Modern Wave Sculpture &amp; Display Set</h3><p>MAX · FBX · OBJ · 32.86 MB</p><button onClick={finishDownload}>Download again</button></div>
-              </article>
-              <article className="asset-card">
-                <img src={alternateImages[2]} alt="Metal sculpture set" />
-                <div><span className="owned-tag">Purchased</span><h3>Metal Sculpture Collection</h3><p>MAX · FBX · Textures · 48.12 MB</p><button>Download again</button></div>
-              </article>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <aside className="prototype-panel" aria-label="Prototype controls">
-        <div><span className="prototype-dot" />Prototype controls</div>
-        <label>User state
-          <select value={userState} onChange={(event) => { setUserState(event.target.value as UserState); setView("product"); setModal("none"); }}>
-            <option value="guest">Guest</option>
-            <option value="no-credit">Member · 0 Credits</option>
-            <option value="credits">Member · 3 Credits</option>
-            <option value="unlocked">Already unlocked</option>
-          </select>
-        </label>
-        <label className="check-label"><input type="checkbox" checked={downloadBlocked} onChange={(event) => setDownloadBlocked(event.target.checked)} /> Block auto-download</label>
-        <button onClick={resetPrototype}>Reset flow</button>
-      </aside>
-
-      {modal !== "none" && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal("none"); }}>
-        {modal === "auth" && (
-          <Dialog onClose={() => setModal("none")} className="auth-dialog">
-            {emailStep === "email" ? <>
-              <p className="modal-kicker">CONTINUE YOUR DOWNLOAD</p>
-              <h2>Sign in or create an account</h2>
-              <p className="modal-intro">We’ll bring you straight back to this model after verification.</p>
-              <button className="google-button">G&nbsp;&nbsp; Continue with Google</button>
-              <div className="or"><span />or<span /></div>
-              <label className="field-label">Email address<input defaultValue="demo@archzz.com" type="email" /></label>
-              <button className="primary full" onClick={() => setEmailStep("code")}>Continue</button>
-              <small className="terms">By continuing, you agree to the Terms of Use and Privacy Policy.</small>
-            </> : <>
-              <button className="back-link" onClick={() => setEmailStep("email")}>← Back</button>
-              <p className="modal-kicker">EMAIL VERIFICATION</p>
-              <h2>Enter the 6-digit code</h2>
-              <p className="modal-intro">A code was sent to demo@archzz.com. This prototype accepts any code.</p>
-              <div className="code-boxes">{[1,2,3,4,5,6].map((item) => <input key={item} maxLength={1} defaultValue={String(item)} aria-label={`Code digit ${item}`} />)}</div>
-              <button className="primary full" onClick={() => { setUserState("no-credit"); setModal("auth-success"); setEmailStep("email"); }}>Verify &amp; continue</button>
-              <button className="resend">Resend code</button>
-            </>}
-          </Dialog>
-        )}
-
-        {modal === "auth-success" && (
-          <Dialog onClose={() => setModal("none")} compact>
-            <div className="success-mark">✓</div>
-            <p className="modal-kicker centered">ACCOUNT READY</p>
-            <h2>Welcome to ARCHZZ</h2>
-            <p className="modal-intro centered">You’re signed in. Continue exactly where you left off—no extra onboarding pop-ups.</p>
-            <button className="primary full" onClick={() => setModal("package")}>Continue to this model</button>
-            <button className="secondary full" onClick={() => setModal("none")}>Stay on product page</button>
-          </Dialog>
-        )}
-
-        {modal === "redeem" && (
-          <Dialog onClose={() => setModal("none")}>
-            <p className="modal-kicker">CREDIT REDEMPTION</p>
-            <h2>Unlock permanently &amp; download</h2>
-            <div className="mini-product"><img src={productImage} alt="Model" /><div><strong>Modern Wave Sculpture</strong><span>Creator Pack · MAX, FBX, OBJ</span></div></div>
-            <div className="credit-ledger"><div><span>Your balance</span><strong>3 Credits</strong></div><div><span>This unlock</span><strong>−1 Credit</strong></div><div className="remaining"><span>Balance after unlock</span><strong>2 Credits</strong></div></div>
-            <div className="info-callout"><strong>One Credit, permanent access</strong><p>This model is added to My Assets. Download it again anytime without spending another Credit.</p></div>
-            <button className="primary full" onClick={() => { setUserState("unlocked"); finishDownload(); }}>Redeem 1 Credit &amp; Download</button>
-            <button className="secondary full" onClick={() => setModal("none")}>Cancel</button>
-          </Dialog>
-        )}
-
-        {modal === "package" && (
-          <Dialog onClose={() => setModal("none")} wide>
-            <p className="modal-kicker">CHOOSE A DOWNLOAD PACKAGE</p>
-            <h2>Pick the files that fit your workflow</h2>
-            <p className="modal-intro">Creator Pack is recommended for the best balance of compatibility and value.</p>
-            <div className="package-grid">
-              {packageOptions.map((item) => <button key={item.id} onClick={() => setSelectedPackage(item.id)} className={`package-option ${selectedPackage === item.id ? "selected" : ""}`}>
-                {item.recommended && <span className="recommend-tag">Recommended</span>}
-                <span className="radio-dot" />
-                <strong>{item.name}</strong><small>{item.meta}</small>
-                <div><b>{item.price}</b><s>{item.old}</s></div>
-              </button>)}
-            </div>
-            <button className="primary full" onClick={() => setModal("checkout")}>Continue with {packageItem.name} · {packageItem.price}</button>
-            <button className="secondary full" onClick={() => setModal("none")}>Cancel</button>
-          </Dialog>
-        )}
-
-        {modal === "checkout" && (
-          <Dialog onClose={() => setModal("none")} wide>
-            <div className="checkout-head"><div><p className="modal-kicker">ORDER CONFIRMATION</p><h2>Review your order</h2></div><span className="secure-badge">Secure checkout</span></div>
-            <div className="checkout-layout">
-              <div>
-                <div className="mini-product checkout-product"><img src={productImage} alt="Model" /><div><strong>Modern Wave Sculpture</strong><span>{packageItem.name} · Commercial license</span></div><b>{packageItem.price}</b></div>
-                <div className="checkout-upsell">
-                  <div><span className="optional-label">OPTIONAL · NOT SELECTED</span><strong>Save more with Credits</strong><p>20 Credits · Unlock 20 models permanently</p></div>
-                  <button>View option</button>
-                </div>
-                <button className="skip-link">Skip offers and continue with this order</button>
-              </div>
-              <div className="summary-card">
-                <h3>Order summary</h3>
-                <div><span>Original price</span><s>{packageItem.old}</s></div>
-                <div><span>Launch discount</span><em>−{selectedPackage === "basic" ? "$2.60" : selectedPackage === "creator" ? "$5.20" : "$6.80"}</em></div>
-                <div className="summary-total"><span>Total due</span><strong>{packageItem.price}</strong></div>
-                <button className="primary full" onClick={() => setModal("payment")}>Choose payment method</button>
-                <small>Offers are never added without your confirmation.</small>
-              </div>
-            </div>
-          </Dialog>
-        )}
-
-        {modal === "payment" && (
-          <Dialog onClose={() => setModal("none")} wide>
-            <p className="modal-kicker">PAYMENT</p>
-            <h2>Choose how you want to pay</h2>
-            <p className="modal-intro">Available methods are shown for your country and currency.</p>
-            <div className="payment-list">
-              <PaymentOption id="antom" selected={payment} onSelect={setPayment} title="Credit or debit card" subtitle="Visa · Mastercard · Amex" badge="Antom" note="Securely processed by Antom" />
-              <PaymentOption id="paypal" selected={payment} onSelect={setPayment} title="PayPal" subtitle="Fast checkout with your PayPal account" badge="PayPal" />
-              <PaymentOption id="wallet" selected={payment} onSelect={setPayment} title="Local wallets" subtitle="DANA · GCash · Touch ’n Go" badge="Wallets" />
-            </div>
-            <div className="payment-bottom"><div><span>Total due</span><strong>{packageItem.price}</strong></div><button className="primary" onClick={() => { setModal("none"); setView("orders"); setSeconds(15 * 60); }}>Create order &amp; continue</button></div>
-            <div className="demo-actions"><span>Prototype shortcuts:</span><button onClick={() => { setUserState("unlocked"); finishDownload(); }}>Simulate success</button><button onClick={() => { setModal("none"); setView("orders"); }}>Simulate failure / pending</button></div>
-          </Dialog>
-        )}
-
-        {modal === "success" && (
-          <Dialog onClose={() => setModal("none")} compact>
-            <div className="success-mark">✓</div>
-            <p className="modal-kicker centered">DOWNLOAD STARTED</p>
-            <h2>Your model is ready</h2>
-            <p className="modal-intro centered">Creator Pack is downloading now. This model has been saved permanently to My Assets.</p>
-            <div className="download-file"><span>ZIP</span><div><strong>modern-wave-creator-pack.zip</strong><small>32.86 MB · MAX, FBX, OBJ</small></div><b>Downloading…</b></div>
-            <button className="primary full" onClick={() => changeView("assets")}>Go to My Assets</button>
-            <button className="secondary full" onClick={() => { setModal("none"); setView("product"); }}>Continue browsing</button>
-          </Dialog>
-        )}
-
-        {modal === "download-blocked" && (
-          <Dialog onClose={() => setModal("none")} compact>
-            <div className="warning-mark">!</div>
-            <p className="modal-kicker centered">BROWSER ACTION NEEDED</p>
-            <h2>Download didn’t start</h2>
-            <p className="modal-intro centered">Your purchase is complete and the model is safely stored in My Assets. Use the button below to download manually.</p>
-            <button className="primary full" onClick={() => setModal("success")}>Download now</button>
-            <button className="secondary full" onClick={() => changeView("assets")}>Go to My Assets</button>
-          </Dialog>
-        )}
-      </div>}
-    </main>
-  );
+function Icon({ name, size = 20 }: { name: "search" | "image" | "heart" | "cart" | "user" | "check" | "download" | "arrow" | "grid" | "filter" | "close" | "menu"; size?: number }) {
+  const paths: Record<string, React.ReactNode> = {
+    search: <><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.2 4.2"/></>, image: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 4 4 3-3 5 5"/></>,
+    heart: <path d="M20.8 5.8a5.5 5.5 0 0 0-7.8 0L12 6.9l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 22l8.8-8.4a5.5 5.5 0 0 0 0-7.8Z"/>, cart: <><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20.3 8H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></>,
+    user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>, check: <><path d="M12 2.5 20 6v6c0 5-3.4 8.2-8 9.5C7.4 20.2 4 17 4 12V6l8-3.5Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></>,
+    download: <><path d="M12 3v12m0 0 5-5m-5 5-5-5"/><path d="M4 19v2h16v-2"/></>, arrow: <path d="M5 12h14m-5-5 5 5-5 5"/>,
+    grid: <><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></>, filter: <><path d="M4 7h16M7 12h10m-7 5h4"/><circle cx="8" cy="7" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="12" cy="17" r="1.5"/></>,
+    close: <path d="m6 6 12 12M18 6 6 18"/>, menu: <path d="M4 7h16M4 12h16M4 17h16"/>,
+  };
+  return <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-function Dialog({ children, onClose, wide = false, compact = false, className = "" }: { children: React.ReactNode; onClose: () => void; wide?: boolean; compact?: boolean; className?: string }) {
-  return <section role="dialog" aria-modal="true" className={`dialog ${wide ? "wide" : ""} ${compact ? "compact" : ""} ${className}`}>
-    <button className="close-button" onClick={onClose} aria-label="Close">×</button>
-    {children}
-  </section>;
+export default function Prototype() {
+  const [page, setPage] = useState<Page>("home"), [query, setQuery] = useState(""), [selected, setSelected] = useState(models[0]);
+  const [favorites, setFavorites] = useState<number[]>([3]), [cart, setCart] = useState<number[]>([]), [owned, setOwned] = useState<number[]>([]);
+  const [user, setUser] = useState<UserMode>("guest"), [modal, setModal] = useState<"none" | "auth" | "checkout" | "success">("none");
+  const [authIntent, setAuthIntent] = useState<"none" | "primary" | "favorite" | "cart">("none");
+  const [mobileNav, setMobileNav] = useState(false), [freeClaimed, setFreeClaimed] = useState(0), [toast, setToast] = useState("");
+  function navigate(next: Page) { setPage(next); setMobileNav(false); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function search(event?: FormEvent) { event?.preventDefault(); if (!query.trim()) setQuery("modern sofa"); navigate("search"); }
+  function openModel(model: Model) { setSelected(model); navigate("product"); }
+  function toggleFavorite(id: number) { if (user === "guest") { setSelected(catalog.find(item => item.id === id) || selected); setAuthIntent("favorite"); return setModal("auth"); } setFavorites(v => v.includes(id) ? v.filter(x => x !== id) : [...v, id]); }
+  function addToCart(id: number) { if (user === "guest") { setSelected(catalog.find(item => item.id === id) || selected); setAuthIntent("cart"); return setModal("auth"); } setCart(v => v.includes(id) ? v : [...v, id]); setToast("Added to cart"); setTimeout(() => setToast(""), 1800); }
+  function primaryAction(model: Model) { setSelected(model); if (owned.includes(model.id)) return setModal("success"); if (user === "guest") { setAuthIntent("primary"); return setModal("auth"); } if (model.free) { if (freeClaimed >= 3) return setToast("Today’s free limit reached"); setOwned(v => [...v, model.id]); setFreeClaimed(v => v + 1); return setModal("success"); } if (user === "pro") { setOwned(v => [...v, model.id]); return setModal("success"); } setModal("checkout"); }
+  function authenticate() { setUser("basic"); if (authIntent === "favorite") { setFavorites(v => v.includes(selected.id) ? v : [...v, selected.id]); setModal("none"); setToast("Saved to Favorites"); } else if (authIntent === "cart") { setCart(v => v.includes(selected.id) ? v : [...v, selected.id]); setModal("none"); setToast("Added to cart"); } else if (authIntent === "primary" && selected.free) { setOwned(v => v.includes(selected.id) ? v : [...v, selected.id]); setFreeClaimed(v => v + 1); setModal("success"); } else if (authIntent === "primary") setModal("checkout"); else { setModal("none"); setToast("Signed in successfully"); } setAuthIntent("none"); }
+  function completePurchase(ids = [selected.id]) { setOwned(v => Array.from(new Set([...v, ...ids]))); setCart(v => v.filter(id => !ids.includes(id))); setModal("success"); }
+  const cartModels = models.filter(model => cart.includes(model.id));
+  return <div className="app-shell">
+    <Header page={page} query={query} cartCount={cart.length} user={user} mobileNav={mobileNav} onMobileNav={setMobileNav} onQuery={setQuery} onSearch={search} onNavigate={navigate} onAccount={() => { if (user === "guest") { setAuthIntent("none"); setModal("auth"); } else navigate("assets"); }}/>
+    {page === "home" && <Home onSearch={search} query={query} onQuery={setQuery} onNavigate={navigate} onOpen={openModel} favorites={favorites} onFavorite={toggleFavorite} onCart={addToCart}/>}
+    {page === "search" && <SearchResults query={query} onQuery={setQuery} onSearch={search} onOpen={openModel} favorites={favorites} onFavorite={toggleFavorite} onCart={addToCart}/>}
+    {page === "product" && <ProductDetail model={selected} owned={owned.includes(selected.id)} user={user} favorite={favorites.includes(selected.id)} onFavorite={() => toggleFavorite(selected.id)} onPrimary={() => primaryAction(selected)} onCart={() => addToCart(selected.id)} onOpen={openModel}/>}
+    {page === "free" && <FreePage claimed={freeClaimed} owned={owned} onOpen={openModel} onClaim={primaryAction}/>}
+    {page === "pricing" && <Pricing user={user} onChoose={mode => { if (user === "guest") setModal("auth"); else { setUser(mode); setToast(`${mode === "pro" ? "Pro" : "Basic"} plan selected`); } }}/>}
+    {page === "cart" && <CartPage items={cartModels} user={user} onRemove={id => setCart(v => v.filter(x => x !== id))} onOpen={openModel} onCheckout={() => cartModels.length && (user === "guest" ? setModal("auth") : completePurchase(cartModels.map(x => x.id)))}/>}
+    {page === "assets" && <Assets owned={catalog.filter(m => owned.includes(m.id))} favorites={models.filter(m => favorites.includes(m.id))} user={user} freeClaimed={freeClaimed} onOpen={openModel} onBrowse={() => navigate("search")}/>}
+    <Footer onNavigate={navigate}/><DemoControl user={user} onUser={setUser} onReset={() => { setUser("guest"); setOwned([]); setCart([]); setFavorites([3]); setFreeClaimed(0); navigate("home"); }}/>{toast && <div className="toast" role="status">{toast}</div>}
+    {modal !== "none" && <Modal onClose={() => setModal("none")}>{modal === "auth" && <Auth onContinue={authenticate}/>} {modal === "checkout" && <Checkout model={selected} onPay={() => completePurchase()}/>} {modal === "success" && <Success model={selected} onClose={() => setModal("none")} onAssets={() => { setModal("none"); navigate("assets"); }}/>}</Modal>}
+  </div>;
 }
 
-function PaymentOption({ id, selected, onSelect, title, subtitle, badge, note }: { id: string; selected: string; onSelect: (id: string) => void; title: string; subtitle: string; badge: string; note?: string }) {
-  return <button className={`payment-option ${selected === id ? "selected" : ""}`} onClick={() => onSelect(id)}>
-    <span className="radio-dot" />
-    <span className="payment-copy"><strong>{title}</strong><small>{subtitle}</small>{note && <em>{note}</em>}</span>
-    <span className={`payment-badge ${id}`}>{badge}</span>
-  </button>;
+function Header({ page, query, cartCount, user, mobileNav, onMobileNav, onQuery, onSearch, onNavigate, onAccount }: { page: Page; query: string; cartCount: number; user: UserMode; mobileNav: boolean; onMobileNav: (v: boolean) => void; onQuery: (v: string) => void; onSearch: (e?: FormEvent) => void; onNavigate: (p: Page) => void; onAccount: () => void }) {
+  const nav = [{ label: "SketchUp Models", action: () => { onQuery("SketchUp"); onSearch(); } }, { label: "3ds Max Models", action: () => { onQuery("3ds Max"); onSearch(); } }, { label: "Today’s Free", action: () => onNavigate("free") }, { label: "Pricing", action: () => onNavigate("pricing") }];
+  return <><div className="utility"><span>Professional 3D assets for architecture & interiors</span><span>English · USD</span></div><header className="header"><button className="logo" onClick={() => onNavigate("home")}>ARCHZZ</button><nav className={mobileNav ? "nav open" : "nav"}>{nav.map(item => <button key={item.label} className={(item.label === "Today’s Free" && page === "free") || (item.label === "Pricing" && page === "pricing") ? "active" : ""} onClick={item.action}>{item.label}</button>)}</nav><div className="header-actions"><button className="icon-button search-trigger" onClick={() => onNavigate("search")}><Icon name="search"/><span>Search</span></button><button className="icon-button hide-mobile" onClick={() => onNavigate("assets")}><Icon name="heart"/></button><button className="icon-button count-wrap" onClick={() => onNavigate("cart")}><Icon name="cart"/>{cartCount > 0 && <b>{cartCount}</b>}</button><button className="account-button" onClick={onAccount}><Icon name="user"/><span>{user === "guest" ? "Sign in" : user === "pro" ? "Pro account" : "My account"}</span></button><button className="mobile-menu" onClick={() => onMobileNav(!mobileNav)}><Icon name={mobileNav ? "close" : "menu"}/></button></div></header>{page !== "home" && page !== "search" && <form className="compact-search" onSubmit={onSearch}><Icon name="search"/><input value={query} onChange={e => onQuery(e.target.value)} placeholder="Search 1M+ professional 3D models"/><button type="button"><Icon name="image"/></button><button className="small-search">Search</button></form>}</>;
 }
 
-function AccountNav({ active, onNavigate }: { active: "orders" | "assets"; onNavigate: (view: View) => void }) {
-  return <aside className="account-nav">
-    <p>My account</p>
-    <button className={active === "assets" ? "active" : ""} onClick={() => onNavigate("assets")}><span>□</span> My Assets</button>
-    <button><span>C</span> Credits &amp; benefits</button>
-    <button className={active === "orders" ? "active" : ""} onClick={() => onNavigate("orders")}><span>▣</span> Orders</button>
-    <button><span>♡</span> Collections</button>
-    <button><span>○</span> Notifications</button>
-  </aside>;
+function Home({ query, onQuery, onSearch, onNavigate, onOpen, favorites, onFavorite, onCart }: { query: string; onQuery: (v: string) => void; onSearch: (e?: FormEvent) => void; onNavigate: (p: Page) => void; onOpen: (m: Model) => void; favorites: number[]; onFavorite: (id: number) => void; onCart: (id: number) => void }) {
+  return <main><section className="home-intro"><div className="home-title-row"><div><p className="kicker">ARCHITECTURE · INTERIORS · LANDSCAPE</p><h1>Production-ready 3D models.<br/>Found in seconds.</h1></div><p>Search a million-plus professional assets, inspect the files you’ll receive, and unlock exactly what you need.</p></div><form className="hero-search" onSubmit={onSearch}><div className="search-mode">Models</div><Icon name="search" size={23}/><input value={query} onChange={e => onQuery(e.target.value)} placeholder="Try “modular sofa corona” or search by image"/><button type="button" className="image-search"><Icon name="image"/></button><button className="search-button">Search</button></form><div className="quick-row"><span>Popular:</span>{["Sofa", "Kitchen", "Olive tree", "Hotel lobby", "Villa"].map(term => <button key={term} onClick={() => { onQuery(term); onSearch(); }}>{term}</button>)}</div><div className="category-rail">{[{ n: "Furniture", c: "326K" }, { n: "Lighting", c: "84K" }, { n: "Plants", c: "71K" }, { n: "Interior scenes", c: "58K" }, { n: "Architecture", c: "42K" }, { n: "Landscape", c: "36K" }].map(item => <button key={item.n} onClick={() => { onQuery(item.n); onSearch(); }}><span>{item.n}</span><small>{item.c} models</small><Icon name="arrow" size={18}/></button>)}</div></section>
+    <ModelSection eyebrow="FRESHLY ADDED" title="New models" subtitle="Recently published assets across SketchUp and 3ds Max." items={models.slice(0, 5)} onOpen={onOpen} favorites={favorites} onFavorite={onFavorite} onCart={onCart} onAll={() => { onQuery("Newest"); onSearch(); }}/>
+    <section className="collection-section"><SectionHeading eyebrow="CURATED STARTING POINTS" title="Browse by project intent" subtitle="Useful groups assembled around real design tasks, not trends."/><div className="collection-grid">{collections.map(item => <button key={item.title} onClick={() => { onQuery(item.title); onSearch(); }}><img src={item.image} alt=""/><span><b>{item.title}</b><small>{item.count} models</small></span><Icon name="arrow"/></button>)}</div></section>
+    <ModelSection eyebrow="MOST USED THIS WEEK" title="Popular with working designers" subtitle="High-intent models surfaced by current demand." items={models.slice(5, 10)} onOpen={onOpen} favorites={favorites} onFavorite={onFavorite} onCart={onCart} onAll={() => { onQuery("Popular"); onSearch(); }}/>
+    <section className="free-strip"><div><span className="kicker light">TODAY’S FREE</span><h2>40 quality-checked models.<br/>Choose any 3 today.</h2><p>20 SketchUp and 20 3ds Max assets refresh daily at 00:00 UTC. Models you claim stay in My Assets.</p><button onClick={() => onNavigate("free")}>Explore today’s selection <Icon name="arrow"/></button></div><div className="free-collage">{models.filter(item => item.free).map(item => <img key={item.id} src={item.image} alt=""/>)}</div></section>
+    <section className="trust-section"><div><Icon name="check" size={28}/><b>Quality checked</b><p>Only governed files receive the badge.</p></div><div><span className="trust-symbol">01</span><b>One model, one clear price</b><p>$1.99 buy once, or unlock with a plan.</p></div><div><span className="trust-symbol">∞</span><b>Keep what you unlock</b><p>Permanent access from My Assets.</p></div><div><Icon name="download" size={28}/><b>Files before hype</b><p>Real formats, versions and sizes—when verified.</p></div></section></main>;
 }
+
+function SearchResults({ query, onQuery, onSearch, onOpen, favorites, onFavorite, onCart }: { query: string; onQuery: (v: string) => void; onSearch: (e?: FormEvent) => void; onOpen: (m: Model) => void; favorites: number[]; onFavorite: (id: number) => void; onCart: (id: number) => void }) {
+  const [type, setType] = useState("All software"), [paid, setPaid] = useState("All models"), [sort, setSort] = useState("Relevance");
+  const filtered = models.filter(item => type === "All software" || item.type === type).filter(item => paid === "All models" || (paid === "Free" ? item.free : !item.free));
+  return <main className="search-page"><div className="search-workbench"><form className="workbench-input" onSubmit={onSearch}><Icon name="search" size={23}/><input value={query} onChange={e => onQuery(e.target.value)} placeholder="Search 1M+ professional 3D models"/><button type="button"><Icon name="image"/></button><button className="search-button">Search</button></form><div className="filter-bar"><FilterSelect value={type} onChange={setType} options={["All software", "SketchUp", "3ds Max"]}/><FilterSelect value={paid} onChange={setPaid} options={["All models", "Paid", "Free"]}/><FilterSelect value="All categories" options={["All categories", "Furniture", "Lighting", "Plants", "Architecture"]}/><FilterSelect value="All styles" options={["All styles", "Modern", "Minimal", "Classic", "Japandi"]}/><button className="filter-more"><Icon name="filter" size={17}/> More filters</button></div><div className="active-filters"><span>Active filters</span><button>{query || "modern sofa"} ×</button>{type !== "All software" && <button>{type} ×</button>}<button>Quality checked ×</button><button className="reset">Reset all</button></div></div><div className="search-body"><aside className="facet-panel"><p className="facet-title">REFINE RESULTS</p>{["Category", "Software", "Renderer", "File version", "Style"].map((label, i) => <details key={label} open={i < 3}><summary>{label}<span>+</span></summary><label><input type="checkbox"/> {i === 0 ? "Furniture" : i === 1 ? "3ds Max" : "Corona"}<small>{326 - i * 47}</small></label><label><input type="checkbox"/> {i === 0 ? "Interior scene" : i === 1 ? "SketchUp" : "V-Ray"}<small>{184 - i * 23}</small></label><label><input type="checkbox"/> Other<small>{92 - i * 7}</small></label></details>)}</aside><section className="results"><div className="results-head"><div><p className="kicker">SEARCH RESULTS</p><h1>{query || "Modern sofa"}</h1><span>24,862 matching models</span></div><div className="result-tools"><span>{filtered.length} shown</span><FilterSelect value={sort} onChange={setSort} options={["Relevance", "Popular", "Newest"]}/><button><Icon name="grid"/></button></div></div><div className="result-grid">{filtered.concat(filtered.slice(0, 3)).map((model, index) => <ModelCard key={`${model.id}-${index}`} model={model} onOpen={onOpen} favorite={favorites.includes(model.id)} onFavorite={onFavorite} onCart={onCart}/>)}</div><button className="load-more">Load more models</button></section></div></main>;
+}
+
+function ProductDetail({ model, owned, user, favorite, onFavorite, onPrimary, onCart, onOpen }: { model: Model; owned: boolean; user: UserMode; favorite: boolean; onFavorite: () => void; onPrimary: () => void; onCart: () => void; onOpen: (m: Model) => void }) {
+  const [image, setImage] = useState(0), detail = [model.image, models[(model.id + 3) % models.length].image, models[(model.id + 6) % models.length].image];
+  return <main className="pdp-page"><div className="breadcrumbs">Home / {model.type} Models / {model.category} / <b>{model.title}</b></div><div className="pdp-main"><div className="pdp-gallery"><div className="thumbnail-list">{detail.map((src, index) => <button key={src} className={image === index ? "active" : ""} onClick={() => setImage(index)}><img src={src} alt=""/></button>)}</div><div className="main-image"><img src={detail[image]} alt={model.title}/><button className="zoom">＋ Enlarge</button></div></div><aside className="buy-panel"><div className="product-heading"><div><span className="software-label">{model.type}</span>{model.checked && <span className="quality-label"><Icon name="check" size={14}/> Quality checked</span>}</div><h1>{model.title}</h1><p>By ArchZZ Studio · SKU AZ-{String(model.id).padStart(6, "0")}</p></div><div className="decision-row"><div><span>BUY ONCE</span><strong>{model.free ? "FREE" : "$1.99"}</strong><small>USD · permanent access</small></div><div><span>OR USE</span><strong>{model.free ? "Today’s free pick" : "1 unlock"}</strong><small>{user === "pro" ? "18 left on Pro" : "with Pro or Max"}</small></div></div><div className="spec-table"><Spec label="Host software" value={model.type}/><Spec label="Compatible version" value={model.version || "Hidden"}/>{model.renderer && <Spec label="Renderer" value={model.renderer}/>}<Spec label="Download size" value={model.size}/><Spec label="File package" value={model.type === "SketchUp" ? ".skp + textures" : ".max + textures"}/><Spec label="License" value="Standard commercial"/></div>{owned && <div className="owned-notice"><Icon name="check"/><span><b>Already in My Assets</b><small>Download again without using another unlock.</small></span></div>}<div className="pdp-actions"><button className="primary-cta" onClick={onPrimary}>{owned ? <><Icon name="download"/> Download again</> : model.free ? "Claim this model" : user === "pro" ? "Unlock with 1 model" : "Buy once · $1.99"}</button>{!model.free && !owned && <button className="cart-cta" onClick={onCart}><Icon name="cart"/> Add to cart</button>}<button className={favorite ? "save-cta saved" : "save-cta"} onClick={onFavorite}><Icon name="heart"/> {favorite ? "Saved" : "Save"}</button></div><p className="purchase-note">Secure payment · Permanent access · File issue support</p><details className="license-summary"><summary>ArchZZ Standard License <span>+</span></summary><p>Use in personal and commercial design projects. Source files may not be redistributed or resold.</p></details></aside></div><section className="pdp-lower"><div><p className="kicker">WHAT YOU RECEIVE</p><h2>A clear package, ready for your workflow.</h2><p>This purchase unlocks this exact SKU and file package. Other software formats are separate products.</p></div><div className="package-list"><span><b>01</b> Main model file <small>{model.type === "SketchUp" ? "SKP" : "MAX"}</small></span><span><b>02</b> Texture folder <small>Included</small></span><span><b>03</b> Commercial license <small>Version saved to order</small></span></div></section><ModelSection eyebrow="RELATED MODELS" title="Keep exploring" subtitle="Same category and reliable model attributes." items={models.filter(item => item.id !== model.id).slice(0, 5)} onOpen={onOpen} favorites={[]} onFavorite={() => {}} onCart={() => {}}/></main>;
+}
+
+function FreePage({ claimed, owned, onOpen, onClaim }: { claimed: number; owned: number[]; onOpen: (m: Model) => void; onClaim: (m: Model) => void }) {
+  const [tab, setTab] = useState<ModelType>("SketchUp");
+  return <main className="free-page"><section className="free-hero"><div><p className="kicker light">TODAY’S FREE · REFRESHES 00:00 UTC</p><h1>Choose any 3 models today.</h1><p>20 SketchUp and 20 3ds Max models. Mix both formats however you like. Anything you claim stays in My Assets.</p></div><div className="free-counter"><span>TODAY’S ALLOWANCE</span><strong>{3 - claimed}<small>/ 3 left</small></strong><div><i style={{ width: `${(claimed / 3) * 100}%` }}/></div></div></section><div className="free-tabs"><button className={tab === "SketchUp" ? "active" : ""} onClick={() => setTab("SketchUp")}>SketchUp <span>20</span></button><button className={tab === "3ds Max" ? "active" : ""} onClick={() => setTab("3ds Max")}>3ds Max <span>20</span></button><p>Choose across both tabs · {claimed} claimed today</p></div><div className="free-grid">{todayFreeModels.filter(item => item.type === tab).map(model => <div className="free-card" key={model.id}><button className="free-image" onClick={() => onOpen(model)}><img src={model.image} alt={model.title}/><span>{model.type}</span></button><div><button onClick={() => onOpen(model)}>{model.title}</button><small>{model.category} · {model.size}</small><button className="claim-button" disabled={claimed >= 3 || owned.includes(model.id)} onClick={() => onClaim(model)}>{owned.includes(model.id) ? "In My Assets" : claimed >= 3 ? "Daily limit reached" : "Claim free"}</button></div></div>)}</div></main>;
+}
+
+function Pricing({ user, onChoose }: { user: UserMode; onChoose: (m: UserMode) => void }) { return <main className="pricing-page"><section className="pricing-intro"><p className="kicker">SIMPLE MODEL ACCESS</p><h1>Pay for the files you need.<br/>Keep every model you unlock.</h1><p>Buy one model for $1.99, or choose a monthly plan for regular project work.</p></section><div className="price-cards"><Plan name="Buy once" price="$1.99" suffix="per model" description="For occasional, specific model needs." features={["No subscription", "Permanent access", "Standard commercial license"]} button="Browse models" onClick={() => onChoose("basic")}/><Plan name="Pro" price="$14.99" suffix="per month" description="For designers working on active projects." features={["30 model unlocks each month", "Roll over up to 60", "$0.99 extra unlocks", "Daily free models included"]} button={user === "pro" ? "Current plan" : "Choose Pro"} featured onClick={() => onChoose("pro")}/><Plan name="Max" price="$49.99" suffix="per month" description="For high-volume studios and visualizers." features={["150 model unlocks each month", "Roll over up to 300", "$0.99 extra unlocks", "Daily free models included"]} button="Choose Max" onClick={() => onChoose("pro")}/></div><section className="pricing-rules"><h2>Clear rules, before you subscribe.</h2>{[["What happens to unlocked models?", "They remain in My Assets with permanent access."], ["Do unused unlocks roll over?", "Yes, up to 60 on Pro and 300 on Max while the plan remains active."], ["Can I buy more?", "Active subscribers can buy extra unlocks in packs of 10 for $0.99 each."], ["Can I cancel?", "Yes. Your plan remains active until the end of the paid period."]].map(([q, a]) => <details key={q}><summary>{q}<span>+</span></summary><p>{a}</p></details>)}</section></main>; }
+
+function CartPage({ items, user, onRemove, onOpen, onCheckout }: { items: Model[]; user: UserMode; onRemove: (id: number) => void; onOpen: (m: Model) => void; onCheckout: () => void }) { const cash = items.length * 1.99; return <main className="cart-page"><div className="cart-title"><p className="kicker">YOUR SELECTION</p><h1>Cart <span>{items.length}</span></h1></div>{items.length === 0 ? <div className="empty-state"><Icon name="cart" size={38}/><h2>Your cart is ready for a project.</h2><p>Add paid models to compare and purchase them together.</p></div> : <div className="cart-layout"><section className="cart-items">{items.map(item => <article key={item.id}><button onClick={() => onOpen(item)}><img src={item.image} alt=""/></button><div><span>{item.type}</span><button onClick={() => onOpen(item)}>{item.title}</button><small>{item.category} · {item.size} · Standard License</small></div><strong>$1.99</strong><button className="remove" onClick={() => onRemove(item.id)}><Icon name="close"/></button></article>)}</section><aside className="order-summary"><h2>Order summary</h2><div><span>{items.length} models</span><b>${cash.toFixed(2)}</b></div>{user === "pro" ? <div className="recommend-box"><span>RECOMMENDED</span><b>Use {items.length} Pro unlocks</b><p>Lowest amount due now. You have 18 unlocks available.</p></div> : <div className="recommend-box"><span>BEST FOR THIS CART</span><b>Buy once · ${cash.toFixed(2)}</b><p>No subscription. Every model stays in My Assets.</p></div>}<div className="total"><span>Due now</span><strong>{user === "pro" ? "$0.00" : `$${cash.toFixed(2)}`}</strong></div><button className="primary-cta" onClick={onCheckout}>{user === "pro" ? `Unlock ${items.length} models` : "Continue to checkout"}</button><small>Taxes may apply based on billing location.</small></aside></div>}</main>; }
+
+function Assets({ owned, favorites, user, freeClaimed, onOpen, onBrowse }: { owned: Model[]; favorites: Model[]; user: UserMode; freeClaimed: number; onOpen: (m: Model) => void; onBrowse: () => void }) { const [tab, setTab] = useState("My Assets"), items = tab === "Favorites" ? favorites : owned; return <main className="account-page"><aside><p>ACCOUNT</p>{["My Assets", "Plan & Unlocks", "My Orders", "Favorites", "Account Settings"].map(item => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</aside><section><div className="account-head"><div><p className="kicker">ACCOUNT LIBRARY</p><h1>{tab}</h1></div><button className="outline-button" onClick={onBrowse}>Browse models</button></div>{tab === "Plan & Unlocks" ? <div className="plan-dashboard"><div><span>CURRENT PLAN</span><strong>{user === "pro" ? "Pro" : "Basic"}</strong><p>{user === "pro" ? "18 of 30 unlocks remain" : "Buy once or upgrade any time"}</p></div><div><span>TODAY’S FREE</span><strong>{3 - freeClaimed} / 3</strong><p>Refreshes at 00:00 UTC</p></div><div><span>EXTRA UNLOCKS</span><strong>0</strong><p>Available while a plan is active</p></div></div> : items.length ? <div className="asset-grid">{items.map(item => <article key={item.id}><button onClick={() => onOpen(item)}><img src={item.image} alt=""/></button><span>{item.type}</span><b>{item.title}</b><button className="download-button"><Icon name="download"/> Download again</button></article>)}</div> : <div className="empty-state"><Icon name={tab === "Favorites" ? "heart" : "download"} size={38}/><h2>No models here yet.</h2><p>Models you unlock or save will appear here.</p><button className="primary-cta" onClick={onBrowse}>Browse models</button></div>}</section></main>; }
+
+function ModelSection({ eyebrow, title, subtitle, items, onOpen, favorites, onFavorite, onCart, onAll }: { eyebrow: string; title: string; subtitle: string; items: Model[]; onOpen: (m: Model) => void; favorites: number[]; onFavorite: (id: number) => void; onCart: (id: number) => void; onAll?: () => void }) { return <section className="model-section"><SectionHeading eyebrow={eyebrow} title={title} subtitle={subtitle} action={onAll}/><div className="home-model-grid">{items.map(model => <ModelCard key={model.id} model={model} onOpen={onOpen} favorite={favorites.includes(model.id)} onFavorite={onFavorite} onCart={onCart}/>)}</div></section>; }
+function SectionHeading({ eyebrow, title, subtitle, action }: { eyebrow: string; title: string; subtitle: string; action?: () => void }) { return <div className="section-heading"><div><p className="kicker">{eyebrow}</p><h2>{title}</h2><span>{subtitle}</span></div>{action && <button onClick={action}>View all <Icon name="arrow"/></button>}</div>; }
+function ModelCard({ model, onOpen, favorite, onFavorite, onCart }: { model: Model; onOpen: (m: Model) => void; favorite: boolean; onFavorite: (id: number) => void; onCart: (id: number) => void }) { return <article className="model-card"><div className="model-image"><button onClick={() => onOpen(model)}><img src={model.image} alt={model.title}/></button><span className="software-chip">{model.type}</span><button className={favorite ? "card-heart active" : "card-heart"} onClick={() => onFavorite(model.id)}><Icon name="heart" size={18}/></button></div><div className="model-copy"><button className="model-title" onClick={() => onOpen(model)}>{model.title}</button><p>{model.category} · ArchZZ Studio</p><div className="model-badges">{model.checked && <span><Icon name="check" size={13}/> Quality checked</span>}{model.renderer && <span>{model.renderer}</span>}</div><div className="model-bottom"><strong>{model.free ? "FREE" : "$1.99"}</strong><button onClick={() => model.free ? onOpen(model) : onCart(model.id)}><Icon name={model.free ? "arrow" : "cart"} size={18}/></button></div></div></article>; }
+function FilterSelect({ value, options, onChange }: { value: string; options: string[]; onChange?: (v: string) => void }) { return <select value={value} onChange={e => onChange?.(e.target.value)}>{options.map(option => <option key={option}>{option}</option>)}</select>; }
+function Spec({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><b>{value}</b></div>; }
+function Plan({ name, price, suffix, description, features, button, featured, onClick }: { name: string; price: string; suffix: string; description: string; features: string[]; button: string; featured?: boolean; onClick: () => void }) { return <article className={featured ? "price-card featured" : "price-card"}>{featured && <span className="recommended">MOST PRACTICAL</span>}<h2>{name}</h2><div className="plan-price"><strong>{price}</strong><span>{suffix}</span></div><p>{description}</p><ul>{features.map(item => <li key={item}><Icon name="check" size={16}/>{item}</li>)}</ul><button onClick={onClick}>{button}</button></article>; }
+function Footer({ onNavigate }: { onNavigate: (p: Page) => void }) { return <footer><div className="footer-brand"><b>ARCHZZ</b><p>Professional 3D assets for architecture, interiors and landscape design.</p><small>© 2026 ARCHZZ TECHNOLOGY PTE. LTD.</small></div><div><b>Models</b><button onClick={() => onNavigate("search")}>SketchUp Models</button><button onClick={() => onNavigate("search")}>3ds Max Models</button><button onClick={() => onNavigate("free")}>Today’s Free</button></div><div><b>Account</b><button onClick={() => onNavigate("assets")}>My Assets</button><button onClick={() => onNavigate("assets")}>Favorites</button><button onClick={() => onNavigate("cart")}>Cart</button></div><div><b>Support</b><button>Help center</button><button>Report a file issue</button><button>Refund policy</button></div><div><b>Legal</b><button>Standard License</button><button>Terms</button><button>Privacy</button><span className="payments">PayPal · Antom</span></div></footer>; }
+function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) { return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onClose(); }}><div className="modal" role="dialog" aria-modal="true"><button className="modal-close" onClick={onClose} aria-label="Close dialog"><Icon name="close"/></button>{children}</div></div>; }
+function Auth({ onContinue }: { onContinue: () => void }) { return <div className="auth-modal"><p className="kicker">CONTINUE YOUR TASK</p><h2>Sign in to save, claim or purchase models.</h2><button className="google-button" onClick={onContinue}>Continue with Google</button><div className="or"><span/>or<span/></div><label>Email address<input type="email" placeholder="you@studio.com"/></label><button className="primary-cta" onClick={onContinue}>Continue with email</button><small>We’ll return you to the same action after sign-in.</small></div>; }
+function Checkout({ model, onPay }: { model: Model; onPay: () => void }) { return <div className="checkout-modal"><p className="kicker">SECURE CHECKOUT</p><h2>Complete your purchase</h2><div className="checkout-item"><img src={model.image} alt=""/><span><b>{model.title}</b><small>{model.type} · Permanent access</small></span><strong>$1.99</strong></div><div className="checkout-lines"><span>Subtotal <b>$1.99</b></span><span>Tax <b>Calculated by location</b></span><span className="checkout-total">Total <b>$1.99 USD</b></span></div><label className="payment-option"><input type="radio" defaultChecked name="payment"/><b>PayPal</b><span>Recommended</span></label><label className="payment-option"><input type="radio" name="payment"/><b>Antom</b></label><button className="primary-cta" onClick={onPay}>Pay $1.99</button><p className="legal-note">By paying, you agree to the ArchZZ Standard License, Terms and Refund Policy. Taxes may apply.</p></div>; }
+function Success({ model, onClose, onAssets }: { model: Model; onClose: () => void; onAssets: () => void }) { return <div className="success-modal"><span className="success-icon"><Icon name="check" size={34}/></span><p className="kicker">MODEL READY</p><h2>{model.title} is now in My Assets.</h2><p>Your download is starting. You can download this model again at any time.</p><button className="primary-cta" onClick={onClose}><Icon name="download"/> Download now</button><button className="text-button" onClick={onAssets}>Go to My Assets</button></div>; }
+function DemoControl({ user, onUser, onReset }: { user: UserMode; onUser: (u: UserMode) => void; onReset: () => void }) { return <div className="demo-control"><span><i/> Prototype state</span><select value={user} onChange={e => onUser(e.target.value as UserMode)}><option value="guest">Guest</option><option value="basic">Registered · Basic</option><option value="pro">Pro · 18 unlocks</option></select><button onClick={onReset}>Reset</button></div>; }
