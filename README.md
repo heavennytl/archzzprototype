@@ -27,7 +27,7 @@ npm run dev
 
 ## 产品文档
 
-- `docs/PRD-v3-model-discovery-commerce.md`
+- `docs/PRD-v3.md`
 - `docs/content-data-governance-standard.md`
 
 ## 校验
