@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <defs>
+    <style>
+      .label { font: 600 15px Arial, Helvetica, sans-serif; letter-spacing: 1.4px; fill: #151515; }
+      .small { font: 500 13px Arial, Helvetica, sans-serif; fill: #625f5a; }
+      .nav { font: 600 13px Arial, Helvetica, sans-serif; fill: #151515; }
+      .rule { stroke: #d8d3cc; stroke-width: 1; }
+    </style>
+
+    <!-- Single source of truth: both Z letters and the red spatial doorway. -->
+    <symbol id="zz-mark" viewBox="0 0 220 100">
+      <path fill="currentColor" d="M0 0H95V18L31 82H95V100H0V82L64 18H0Z"/>
+      <path fill="#8F1818" d="M103 30L117 18V82L103 94Z"/>
+      <path fill="currentColor" d="M125 0H220V18L156 82H220V100H125V82L189 18H125Z"/>
+    </symbol>
+
+    <!-- Complete brand spelling. The same zz-mark is reused in every lockup. -->
+    <symbol id="archzz-wordmark" viewBox="0 0 590 100">
+      <text x="0" y="88" textLength="380" lengthAdjust="spacingAndGlyphs"
+            font-family="Arial, Helvetica, sans-serif" font-size="112" font-weight="700"
+            fill="currentColor">ARCH</text>
+      <!-- Optical cap-height match: ZZ aligns with ARCH instead of overpowering it. -->
+      <use href="#zz-mark" x="395" y="6" width="180.4" height="82"/>
+    </symbol>
+
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#151515" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect width="1536" height="1024" fill="#F7F5F1"/>
+
+  <text class="label" x="64" y="58">MASTER WORDMARK</text>
+  <line class="rule" x1="64" y1="74" x2="1472" y2="74"/>
+  <g color="#151515">
+    <use href="#archzz-wordmark" x="72" y="130" width="860" height="140"/>
+  </g>
+
+  <text class="label" x="1070" y="118">FIXED DOUBLE-Z SIGNATURE</text>
+  <rect x="1068" y="142" width="404" height="212" rx="4" fill="#FCFBF8" stroke="#D8D3CC"/>
+  <g color="#151515">
+    <use href="#zz-mark" x="1130" y="190" width="280" height="127"/>
+  </g>
+  <line x1="1269" y1="158" x2="1269" y2="336" stroke="#8F1818" stroke-width="1" stroke-dasharray="5 5" opacity="0.45"/>
+  <text class="small" x="1070" y="378">ONE GEOMETRY · ONE ANGLE · ONE POSITION</text>
+
+  <line class="rule" x1="64" y1="422" x2="1472" y2="422"/>
+
+  <text class="label" x="64" y="466">WEBSITE NAVIGATION</text>
+  <g filter="url(#soft-shadow)">
+    <rect x="64" y="488" width="1408" height="100" rx="5" fill="#FFFFFF"/>
+  </g>
+  <g color="#151515">
+    <use href="#archzz-wordmark" x="96" y="518" width="236" height="38"/>
+  </g>
+  <text class="nav" x="400" y="546">SketchUp Models</text>
+  <text class="nav" x="570" y="546">3ds Max Models</text>
+  <text class="nav" x="728" y="546">Today’s Free</text>
+  <text class="nav" x="842" y="546">Pricing</text>
+  <circle cx="1322" cy="538" r="9" fill="none" stroke="#151515" stroke-width="2"/>
+  <line x1="1329" y1="545" x2="1336" y2="552" stroke="#151515" stroke-width="2"/>
+  <path d="M1380 529h22l-2 18h-16z" fill="none" stroke="#151515" stroke-width="2"/>
+
+  <text class="label" x="64" y="650">LIGHT</text>
+  <text class="label" x="550" y="650">REVERSED</text>
+  <text class="label" x="1036" y="650">SIGNATURE MARK</text>
+
+  <rect x="64" y="674" width="420" height="174" rx="5" fill="#FFFFFF" stroke="#D8D3CC"/>
+  <g color="#151515">
+    <use href="#archzz-wordmark" x="104" y="730" width="340" height="55"/>
+  </g>
+
+  <rect x="550" y="674" width="420" height="174" rx="5" fill="#151515"/>
+  <g color="#FFFFFF">
+    <use href="#archzz-wordmark" x="590" y="730" width="340" height="55"/>
+  </g>
+
+  <rect x="1036" y="674" width="436" height="174" rx="5" fill="#FFFFFF" stroke="#D8D3CC"/>
+  <g color="#151515">
+    <use href="#zz-mark" x="1164" y="704" width="180" height="82"/>
+  </g>
+  <text class="small" x="1140" y="820">ZZ + SIGNATURE RED DOOR</text>
+
+  <text class="label" x="64" y="902">BROWSER TAB + FAVICON SCALE TEST</text>
+  <rect x="64" y="922" width="600" height="72" rx="16" fill="#EAE8E4"/>
+  <rect x="92" y="938" width="42" height="42" rx="9" fill="#151515"/>
+  <g color="#FFFFFF">
+    <use href="#zz-mark" x="99" y="948" width="28" height="13"/>
+  </g>
+  <text x="154" y="963" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="600" fill="#151515">ARCHZZ — Professional 3D Models</text>
+
+  <text class="small" x="790" y="938">16</text>
+  <rect x="784" y="950" width="16" height="16" rx="3" fill="#151515"/>
+  <g color="#FFFFFF"><use href="#zz-mark" x="786" y="955" width="12" height="6"/></g>
+
+  <text class="small" x="935" y="926">32</text>
+  <rect x="926" y="938" width="32" height="32" rx="7" fill="#151515"/>
+  <g color="#FFFFFF"><use href="#zz-mark" x="931" y="947" width="22" height="10"/></g>
+
+  <text class="small" x="1112" y="910">64</text>
+  <rect x="1096" y="922" width="64" height="64" rx="14" fill="#151515"/>
+  <g color="#FFFFFF"><use href="#zz-mark" x="1106" y="941" width="44" height="20"/></g>
+
+  <text class="small" x="1226" y="950">Every instance reuses the same</text>
+  <text class="small" x="1226" y="971">red doorway geometry.</text>
+</svg>
