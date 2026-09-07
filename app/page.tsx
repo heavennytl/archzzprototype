@@ -37,10 +37,184 @@ type Model = {
 };
 type OrderRecord = {
   id: string;
+  orderId?: string;
   modelId: number;
   date: string;
   access: string;
+  seeded?: boolean;
+  status?:
+    | "Pending"
+    | "Processing"
+    | "Paid"
+    | "Failed"
+    | "Expired"
+    | "Refund processing"
+    | "Refunded";
 };
+type BillingRecord = {
+  id: string;
+  title: string;
+  date: string;
+  amount: string;
+  status:
+    | "Pending"
+    | "Processing"
+    | "Paid"
+    | "Failed"
+    | "Expired"
+    | "Refund processing"
+    | "Refunded";
+  kind: "Subscription" | "Legacy VIP" | "Legacy credits";
+  seeded?: boolean;
+};
+type LegacyBenefits = {
+  welcomeDownloads: number;
+  invitationDownloads: number;
+  vipCredits: number;
+  downloadCredits: number;
+  vipActive: boolean;
+};
+type BenefitChoice =
+  | "auto"
+  | "welcome"
+  | "invitation"
+  | "vipCredits"
+  | "downloadCredits"
+  | "planCredits"
+  | "cash";
+const legacyBenefitMeta = [
+  { key: "welcome" as const, balanceKey: "welcomeDownloads" as const, label: "Welcome credit", expires: "Sep 10, 2026" },
+  { key: "invitation" as const, balanceKey: "invitationDownloads" as const, label: "Invitation credit", expires: "Sep 30, 2026" },
+  { key: "vipCredits" as const, balanceKey: "vipCredits" as const, label: "Legacy VIP credits", expires: "Oct 07, 2026" },
+  { key: "downloadCredits" as const, balanceKey: "downloadCredits" as const, label: "Download Credits", expires: "Dec 31, 2026" },
+];
+type BenefitAllocation = {
+  welcome: number;
+  invitation: number;
+  vipCredits: number;
+  downloadCredits: number;
+  planCredits: number;
+  cashModels: number;
+  cashAmount: number;
+  vipDiscount: number;
+  source:
+    | "welcome"
+    | "invitation"
+    | "vipCredits"
+    | "downloadCredits"
+    | "planCredits"
+    | "cash"
+    | "mixed";
+};
+
+function resolveBenefitChoice(
+  choice: BenefitChoice,
+  user: UserMode,
+  benefits: LegacyBenefits,
+  planBalance: number,
+  hasLegacyBenefits: boolean,
+): Exclude<BenefitChoice, "auto"> {
+  if (choice !== "auto") return choice;
+  if (hasLegacyBenefits) {
+    const nearest = legacyBenefitMeta.find((item) => benefits[item.balanceKey] > 0);
+    if (nearest) return nearest.key;
+  }
+  return (user === "pro" || user === "max") && planBalance > 0
+    ? "planCredits"
+    : "cash";
+}
+
+function allocateBenefits(
+  count: number,
+  user: UserMode,
+  benefits: LegacyBenefits,
+  planBalance: number,
+  hasLegacyBenefits = false,
+  choice: BenefitChoice = "auto",
+): BenefitAllocation {
+  let remaining = count;
+  const take = (available: number) => {
+    const used = Math.min(remaining, Math.max(0, available));
+    remaining -= used;
+    return used;
+  };
+  const selectedChoice = resolveBenefitChoice(
+    choice,
+    user,
+    benefits,
+    planBalance,
+    hasLegacyBenefits,
+  );
+  const welcome = selectedChoice === "welcome" && hasLegacyBenefits ? take(benefits.welcomeDownloads) : 0;
+  const invitation = selectedChoice === "invitation" && hasLegacyBenefits ? take(benefits.invitationDownloads) : 0;
+  const vipCredits = selectedChoice === "vipCredits" && hasLegacyBenefits ? take(benefits.vipCredits) : 0;
+  const downloadCredits = selectedChoice === "downloadCredits" && hasLegacyBenefits ? take(benefits.downloadCredits) : 0;
+  const planCredits = selectedChoice === "planCredits" && (user === "pro" || user === "max")
+    ? take(planBalance)
+    : 0;
+  const cashModels = remaining;
+  const fullCashAmount = cashModels * 1.99;
+  const vipDiscount =
+    hasLegacyBenefits && benefits.vipActive ? fullCashAmount * 0.15 : 0;
+  const activeSources = [
+    welcome && "welcome",
+    invitation && "invitation",
+    vipCredits && "vipCredits",
+    downloadCredits && "downloadCredits",
+    planCredits && "planCredits",
+    cashModels && "cash",
+  ].filter(Boolean) as BenefitAllocation["source"][];
+  return {
+    welcome,
+    invitation,
+    vipCredits,
+    downloadCredits,
+    planCredits,
+    cashModels,
+    cashAmount: fullCashAmount - vipDiscount,
+    vipDiscount,
+    source: activeSources.length > 1 ? "mixed" : activeSources[0] || "cash",
+  };
+}
+
+function allocationSources(
+  allocation: BenefitAllocation,
+): Array<Exclude<BenefitAllocation["source"], "mixed">> {
+  return [
+    ...Array(allocation.welcome).fill("welcome"),
+    ...Array(allocation.invitation).fill("invitation"),
+    ...Array(allocation.vipCredits).fill("vipCredits"),
+    ...Array(allocation.downloadCredits).fill("downloadCredits"),
+    ...Array(allocation.planCredits).fill("planCredits"),
+    ...Array(allocation.cashModels).fill("cash"),
+  ] as Array<Exclude<BenefitAllocation["source"], "mixed">>;
+}
+
+function entitlementLabel(
+  source: Exclude<BenefitAllocation["source"], "mixed">,
+  user: UserMode,
+  cashUnitPrice = 1.99,
+) {
+  return source === "welcome"
+    ? "Welcome download"
+    : source === "invitation"
+      ? "Invitation reward"
+      : source === "vipCredits"
+        ? "Legacy VIP credit"
+        : source === "downloadCredits"
+          ? "Legacy Download Credit"
+          : source === "planCredits"
+            ? `${user === "max" ? "Max" : "Pro"} credit`
+            : `$${cashUnitPrice.toFixed(2)}`;
+}
+
+function formatTransactionDate(date = new Date()) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
 
 const models: Model[] = [
   {
@@ -281,6 +455,7 @@ function Icon({
     | "arrow"
     | "grid"
     | "filter"
+    | "globe"
     | "close"
     | "menu";
   size?: number;
@@ -355,6 +530,12 @@ function Icon({
         <circle cx="12" cy="17" r="1.5" />
       </>
     ),
+    globe: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3c2.7 2.5 4.1 5.5 4.1 9s-1.4 6.5-4.1 9c-2.7-2.5-4.1-5.5-4.1-9S9.3 5.5 12 3Z" />
+      </>
+    ),
     close: <path d="m6 6 12 12M18 6 6 18" />,
     menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   };
@@ -372,6 +553,43 @@ function Icon({
       aria-hidden="true"
     >
       {paths[name]}
+    </svg>
+  );
+}
+
+function ArchzzWordmark() {
+  return (
+    <svg
+      className="archzz-wordmark"
+      viewBox="0 0 590 100"
+      role="img"
+      aria-label="ARCHZZ"
+    >
+      <text
+        x="0"
+        y="88"
+        textLength="380"
+        lengthAdjust="spacingAndGlyphs"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="112"
+        fontWeight="700"
+        fill="currentColor"
+      >
+        ARCH
+      </text>
+      <g transform="translate(395 6) scale(.686 .745)">
+        <path
+          fill="currentColor"
+          transform="translate(0 22) scale(.8)"
+          d="M0 0H115V20L38 90H110V110H0V90L77 20H0Z"
+        />
+        <path fill="#8F1818" d="M108 46L122 38V94L108 102Z" />
+        <path
+          fill="currentColor"
+          transform="translate(138 0)"
+          d="M0 0H115V20L38 90H110V110H0V90L77 20H0Z"
+        />
+      </g>
     </svg>
   );
 }
@@ -407,24 +625,135 @@ export default function Prototype() {
     [owned, setOwned] = useState<number[]>([]);
   const [user, setUser] = useState<UserMode>("guest"),
     [modal, setModal] = useState<
-      "none" | "auth" | "checkout" | "cartCheckout" | "success"
+      | "none"
+      | "auth"
+      | "checkout"
+      | "cartCheckout"
+      | "subscriptionCheckout"
+      | "subscriptionSuccess"
+      | "license"
+      | "success"
     >("none");
   const [authIntent, setAuthIntent] = useState<
-    "none" | "primary" | "favorite" | "cart" | "cartCheckout" | "plan"
+    | "none"
+    | "primary"
+    | "favorite"
+    | "cart"
+    | "cartCheckout"
+    | "plan"
+    | "account"
   >("none");
   const [mobileNav, setMobileNav] = useState(false),
     [freeClaimed, setFreeClaimed] = useState(0),
     [toast, setToast] = useState("");
-  const [searchType, setSearchType] = useState("All software"),
+  const [searchType, setSearchType] = useState("All formats"),
     [accountTab, setAccountTab] = useState<AccountTab>("My Assets");
+  const [legacyBenefits, setLegacyBenefits] = useState<LegacyBenefits>({
+    welcomeDownloads: 2,
+    invitationDownloads: 1,
+    vipCredits: 8,
+    downloadCredits: 12,
+    vipActive: true,
+  });
+  const [hasLegacyBenefits, setHasLegacyBenefits] = useState(false);
+  const [benefitChoice, setBenefitChoice] = useState<BenefitChoice>("auto");
+  const [showHistoricalRecords, setShowHistoricalRecords] = useState(false);
+  const [autoRenew, setAutoRenew] = useState(true);
+  const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
+  const [pendingAccountTab, setPendingAccountTab] =
+    useState<AccountTab>("My Assets");
   const [pendingPlan, setPendingPlan] = useState<"pro" | "max" | null>(null),
+    [subscriptionResume, setSubscriptionResume] = useState<
+      "none" | "pdp" | "cart"
+    >("none"),
     [successCount, setSuccessCount] = useState(1);
+  const [successNotice, setSuccessNotice] = useState({
+    title: "Model unlocked",
+    message: "Ready to download from My Assets.",
+  });
   const [searchHistory, setSearchHistory] = useState([
     "Modern sofa",
     "Kitchen island",
     "Olive tree",
   ]);
-  const [orders, setOrders] = useState<OrderRecord[]>([]),
+  const [orders, setOrders] = useState<OrderRecord[]>([
+      {
+        id: "AZ-REFUND-2408",
+        modelId: 2,
+        date: "Aug 18, 2026",
+        access: "$1.99 refunded · License and download access revoked",
+        status: "Refunded",
+        seeded: true,
+      },
+      {
+        id: "AZ-REFUNDING-2410",
+        modelId: 1,
+        date: "Aug 20, 2026",
+        access: "Access remains until refund completes",
+        status: "Refund processing",
+        seeded: true,
+      },
+      {
+        id: "AZ-PENDING-2412",
+        modelId: 3,
+        date: "Aug 22, 2026",
+        access: "Payment required · 11:42 remaining",
+        status: "Pending",
+        seeded: true,
+      },
+      {
+        id: "AZ-FAILED-2414",
+        modelId: 4,
+        date: "Aug 24, 2026",
+        access: "Payment failed · no access granted",
+        status: "Failed",
+        seeded: true,
+      },
+      {
+        id: "AZ-PROCESSING-2415",
+        modelId: 5,
+        date: "Aug 25, 2026",
+        access: "Payment received · granting access",
+        status: "Processing",
+        seeded: true,
+      },
+      {
+        id: "AZ-EXPIRED-2416",
+        modelId: 6,
+        date: "Aug 26, 2026",
+        access: "Payment window expired · no access granted",
+        status: "Expired",
+        seeded: true,
+      },
+      {
+        id: "AZ-CREDIT-REFUND-2417",
+        modelId: 7,
+        date: "Aug 27, 2026",
+        access: "1 Pro credit returned · License and access revoked",
+        status: "Refunded",
+        seeded: true,
+      },
+    ]),
+    [billingRecords, setBillingRecords] = useState<BillingRecord[]>([
+      {
+        id: "BILL-VIP-0726",
+        title: "Legacy VIP monthly",
+        date: "Jul 26, 2026",
+        amount: "$5.00",
+        status: "Paid",
+        kind: "Legacy VIP",
+        seeded: true,
+      },
+      {
+        id: "BILL-CREDIT-0612",
+        title: "Download Credits ×45",
+        date: "Jun 12, 2026",
+        amount: "$10.00",
+        status: "Paid",
+        kind: "Legacy credits",
+        seeded: true,
+      },
+    ]),
     [creditUsed, setCreditUsed] = useState(0),
     [infoKey, setInfoKey] = useState<InfoKey>("about");
   function navigate(next: Page) {
@@ -447,7 +776,7 @@ export default function Prototype() {
     rememberSearch(term);
     navigate("search");
   }
-  function searchFor(term: string, type = "All software") {
+  function searchFor(term: string, type = "All formats") {
     setQuery(term);
     setSearchType(type);
     rememberSearch(term);
@@ -457,13 +786,17 @@ export default function Prototype() {
     setSelected(model);
     navigate("product");
   }
-  function addOrders(ids: number[], access: string) {
+  function addOrders(ids: number[], access: string | string[]) {
+    const date = formatTransactionDate();
+    const orderId = `AZ-${Date.now()}`;
     setOrders((items) => [
       ...ids.map((modelId, index) => ({
-        id: `AZ-${Date.now()}-${modelId}`,
+        id: `${orderId}-ITEM-${index + 1}`,
+        orderId,
         modelId,
-        date: `Aug ${String(26 - index).padStart(2, "0")}, 2026`,
-        access,
+        date,
+        access: Array.isArray(access) ? access[index] : access,
+        status: "Paid" as const,
       })),
       ...items,
     ]);
@@ -503,7 +836,11 @@ export default function Prototype() {
     setSelected(model);
     setSuccessCount(1);
     if (!model.checked) return setToast("This item is unavailable");
-    if (owned.includes(model.id)) return setModal("success");
+    if (owned.includes(model.id)) {
+      setModal("none");
+      setToast("Download started");
+      return setTimeout(() => setToast(""), 1800);
+    }
     if (user === "guest") {
       setAuthIntent("primary");
       return setModal("auth");
@@ -512,21 +849,18 @@ export default function Prototype() {
       if (freeClaimed >= 3) return setToast("Today’s free limit reached");
       setOwned((v) => [...v, model.id]);
       setFreeClaimed((v) => v + 1);
-      addOrders([model.id], "Free claim");
-      return setModal("success");
-    }
-    if (user === "pro" || user === "max") {
-      const balance = (user === "max" ? 124 : 18) - creditUsed;
-      if (balance < 1) return setToast("No credits remaining");
-      setOwned((v) => [...v, model.id]);
-      setCreditUsed((v) => v + 1);
-      addOrders([model.id], `1 ${user === "max" ? "Max" : "Pro"} credit`);
-      return setModal("success");
+      addOrders([model.id], "Free download");
+      setModal("none");
+      setToast("Download started · Saved to My Assets");
+      return setTimeout(() => setToast(""), 1800);
     }
     setModal("checkout");
   }
   function authenticate() {
     setUser("basic");
+    setHasLegacyBenefits(false);
+    setShowHistoricalRecords(false);
+    setOwned([]);
     if (authIntent === "favorite") {
       setFavorites((v) => (v.includes(selected.id) ? v : [...v, selected.id]));
       setModal("none");
@@ -537,17 +871,23 @@ export default function Prototype() {
       setToast("Added to cart");
     } else if (authIntent === "cartCheckout") setModal("cartCheckout");
     else if (authIntent === "primary" && selected.free) {
-      setOwned((v) => (v.includes(selected.id) ? v : [...v, selected.id]));
-      setFreeClaimed((v) => v + 1);
-      addOrders([selected.id], "Free claim");
-      setModal("success");
+      if (freeClaimed >= 3) {
+        setModal("none");
+        setToast("Today’s free limit reached");
+      } else {
+        setOwned((v) => (v.includes(selected.id) ? v : [...v, selected.id]));
+        setFreeClaimed((v) => v + 1);
+        addOrders([selected.id], "Free download");
+        setModal("none");
+        setToast("Download started · Saved to My Assets");
+      }
     } else if (authIntent === "primary") setModal("checkout");
-    else if (authIntent === "plan" && pendingPlan) {
-      setUser(pendingPlan);
-      setCreditUsed(0);
+    else if (authIntent === "plan" && pendingPlan)
+      setModal("subscriptionCheckout");
+    else if (authIntent === "account") {
+      setAccountTab(pendingAccountTab);
       setModal("none");
-      setToast(`${pendingPlan === "max" ? "Max" : "Pro"} plan selected`);
-      setPendingPlan(null);
+      navigate("assets");
     } else {
       setModal("none");
       setToast("Signed in successfully");
@@ -556,37 +896,157 @@ export default function Prototype() {
   }
   function completePurchase(ids = [selected.id]) {
     const subscribed = user === "pro" || user === "max",
-      balance = (user === "max" ? 124 : 18) - creditUsed;
-    if (subscribed && ids.length > balance) {
-      setModal("none");
-      return setToast("Not enough credits for this order");
-    }
+      balance = subscribed ? (user === "max" ? 150 : 30) - creditUsed : 0,
+      allocation = allocateBenefits(
+        ids.length,
+        user,
+        legacyBenefits,
+        balance,
+        hasLegacyBenefits,
+        benefitChoice,
+      );
     setOwned((v) => Array.from(new Set([...v, ...ids])));
     setCart((v) => v.filter((id) => !ids.includes(id)));
-    if (subscribed) setCreditUsed((v) => v + ids.length);
-    addOrders(
-      ids,
-      subscribed
-        ? `1 ${user === "max" ? "Max" : "Pro"} credit`
-        : "$1.99 buy once",
+    setLegacyBenefits((current) => ({
+      ...current,
+      welcomeDownloads: current.welcomeDownloads - allocation.welcome,
+      invitationDownloads:
+        current.invitationDownloads - allocation.invitation,
+      vipCredits: current.vipCredits - allocation.vipCredits,
+      downloadCredits: current.downloadCredits - allocation.downloadCredits,
+    }));
+    if (allocation.planCredits)
+      setCreditUsed((v) => v + allocation.planCredits);
+    const cashUnitPrice = allocation.cashModels
+      ? allocation.cashAmount / allocation.cashModels
+      : 1.99;
+    const access = allocationSources(allocation).map((source) =>
+      entitlementLabel(source, user, cashUnitPrice),
     );
+    if (resumingOrderId && ids.length === 1) {
+      setOrders((items) =>
+        items.map((order) =>
+          order.id === resumingOrderId
+            ? {
+                ...order,
+                date: formatTransactionDate(),
+                access: access[0],
+                status: "Paid",
+              }
+            : order,
+        ),
+      );
+      setResumingOrderId(null);
+    } else {
+      addOrders(ids, access);
+    }
     setSuccessCount(ids.length);
+    setSuccessNotice({
+      title: allocation.cashAmount > 0 ? "Purchase complete" : ids.length > 1 ? "Models unlocked" : "Model unlocked",
+      message: ids.length > 1
+        ? `${ids.length} models were added to My Assets.`
+        : `${catalog.find((model) => model.id === ids[0])?.title || "Your model"} is ready in My Assets.`,
+    });
     setModal("success");
   }
-  function choosePlan(mode: "pro" | "max") {
+  function choosePlan(
+    mode: "pro" | "max",
+    resume: "none" | "pdp" | "cart" = "none",
+  ) {
+    if (user === mode) return;
+    if (user === "max" && mode === "pro") {
+      setToast("Cancel Max first; Pro can be selected after the current cycle ends.");
+      return;
+    }
+    setSubscriptionResume(resume);
+    setPendingPlan(mode);
     if (user === "guest") {
-      setPendingPlan(mode);
       setAuthIntent("plan");
       setModal("auth");
     } else {
-      setUser(mode);
-      setCreditUsed(0);
-      setToast(`${mode === "max" ? "Max" : "Pro"} plan selected`);
+      setModal("subscriptionCheckout");
+    }
+  }
+  function completeSubscription() {
+    if (!pendingPlan) return;
+    const upgrading = user === "pro" && pendingPlan === "max";
+    const resumeIds =
+      subscriptionResume === "pdp"
+        ? [selected.id]
+        : subscriptionResume === "cart"
+          ? cartModels.map((model) => model.id)
+          : [];
+    const planTotal = pendingPlan === "max" ? 150 : 30;
+    const resumeAllocation = allocateBenefits(
+      resumeIds.length,
+      pendingPlan,
+      legacyBenefits,
+      upgrading ? planTotal - creditUsed : planTotal,
+      false,
+      "planCredits",
+    );
+    setUser(pendingPlan);
+    setCreditUsed(
+      (used) => (upgrading ? used : 0) + resumeAllocation.planCredits,
+    );
+    setAutoRenew(true);
+    setBillingRecords((records) => [
+      {
+        id: `BILL-${Date.now()}`,
+        title: upgrading
+          ? "Pro to Max upgrade"
+          : `${pendingPlan === "max" ? "Max" : "Pro"} monthly subscription`,
+        date: formatTransactionDate(),
+        amount: upgrading
+          ? "$35.00"
+          : pendingPlan === "max"
+            ? "$49.99"
+            : "$14.99",
+        status: "Paid",
+        kind: "Subscription",
+      },
+      ...records,
+    ]);
+    const activatedPlan = pendingPlan === "max" ? "Max" : "Pro";
+    if (resumeIds.length) {
+      setLegacyBenefits((current) => ({
+        ...current,
+        welcomeDownloads:
+          current.welcomeDownloads - resumeAllocation.welcome,
+        invitationDownloads:
+          current.invitationDownloads - resumeAllocation.invitation,
+        vipCredits: current.vipCredits - resumeAllocation.vipCredits,
+        downloadCredits:
+          current.downloadCredits - resumeAllocation.downloadCredits,
+      }));
+      setOwned((items) => Array.from(new Set([...items, ...resumeIds])));
+      setCart((items) => items.filter((id) => !resumeIds.includes(id)));
+      addOrders(
+        resumeIds,
+        allocationSources(resumeAllocation).map((source) =>
+          entitlementLabel(source, pendingPlan),
+        ),
+      );
+      setSuccessCount(resumeIds.length);
+      setSuccessNotice({
+        title: upgrading ? "Max upgrade complete" : `${activatedPlan} is active`,
+        message: `${resumeIds.length} model${resumeIds.length > 1 ? "s" : ""} unlocked and added to My Assets.`,
+      });
+      setPendingPlan(null);
+      setSubscriptionResume("none");
+      setModal("success");
+    } else {
+      setSuccessNotice({
+        title: upgrading ? "Max upgrade complete" : `${activatedPlan} is active`,
+        message: `${planTotal} monthly credits are ready. Next renewal: Oct 07, 2026.`,
+      });
+      setModal("subscriptionSuccess");
     }
   }
   function openAccount(tab: AccountTab) {
     if (user === "guest") {
-      setAuthIntent("none");
+      setPendingAccountTab(tab);
+      setAuthIntent("account");
       setModal("auth");
       return;
     }
@@ -697,7 +1157,9 @@ export default function Prototype() {
           allOwned={owned}
           favorites={favorites}
           user={user}
-          creditBalance={(user === "max" ? 124 : 18) - creditUsed}
+          creditBalance={(user === "max" ? 150 : 30) - creditUsed}
+          legacyBenefits={legacyBenefits}
+          hasLegacyBenefits={hasLegacyBenefits}
           favorite={favorites.includes(selected.id)}
           onFavorite={() => toggleFavorite(selected.id)}
           onFavoriteModel={toggleFavorite}
@@ -706,6 +1168,7 @@ export default function Prototype() {
           onCartModel={addToCart}
           onOpen={openModel}
           onPricing={() => navigate("pricing")}
+          onLicense={() => setModal("license")}
         />
       )}
       {page === "free" && (
@@ -727,21 +1190,22 @@ export default function Prototype() {
         <CartPage
           items={cartModels}
           user={user}
-          creditBalance={(user === "max" ? 124 : 18) - creditUsed}
+          creditBalance={(user === "max" ? 150 : 30) - creditUsed}
+          legacyBenefits={legacyBenefits}
+          hasLegacyBenefits={hasLegacyBenefits}
+          benefitChoice={benefitChoice}
+          onBenefitChoice={setBenefitChoice}
           onRemove={(id) => setCart((v) => v.filter((x) => x !== id))}
           onOpen={openModel}
           onCheckout={() => {
             if (!cartModels.length) return;
-            if (
-              (user === "pro" || user === "max") &&
-              cartModels.length > (user === "max" ? 124 : 18) - creditUsed
-            )
-              return setToast("Not enough credits for this order");
             if (user === "guest") {
               setAuthIntent("cartCheckout");
               setModal("auth");
             } else setModal("cartCheckout");
           }}
+          onChoosePlan={(plan) => choosePlan(plan, "cart")}
+          onPricing={() => navigate("pricing")}
         />
       )}
       {page === "assets" && (
@@ -753,11 +1217,30 @@ export default function Prototype() {
           user={user}
           freeClaimed={freeClaimed}
           creditUsed={creditUsed}
-          orders={orders}
+          orders={showHistoricalRecords ? orders : orders.filter((order) => !order.seeded)}
+          billingRecords={showHistoricalRecords ? billingRecords : billingRecords.filter((record) => !record.seeded)}
+          legacyBenefits={legacyBenefits}
+          hasLegacyBenefits={hasLegacyBenefits}
+          autoRenew={autoRenew}
           onOpen={openModel}
           onBrowse={() => navigate("search")}
           onPricing={() => navigate("pricing")}
-          onDemoDownload={() => setToast("File download is not connected")}
+          onDemoDownload={() => setToast("Download started")}
+          onOrderAction={(order) => {
+            const orderModel = catalog.find((model) => model.id === order.modelId);
+            if (!orderModel) return;
+            setSelected(orderModel);
+            setResumingOrderId(order.id);
+            setModal("checkout");
+          }}
+          onToggleRenew={() => {
+            setAutoRenew((current) => !current);
+            setToast(
+              autoRenew
+                ? "Auto-renewal cancelled. Access remains active through Oct 07, 2026."
+                : "Auto-renewal restored.",
+            );
+          }}
           onAccountNotice={(message) => {
             setToast(message);
             setTimeout(() => setToast(""), 1800);
@@ -772,29 +1255,112 @@ export default function Prototype() {
         </div>
       )}
       {modal !== "none" && (
-        <Modal onClose={() => setModal("none")}>
+        <Modal onClose={() => {
+          setModal("none");
+          setResumingOrderId(null);
+        }}>
           {modal === "auth" && <Auth onContinue={authenticate} />}{" "}
           {modal === "checkout" && (
             <Checkout
               models={[selected]}
               user={user}
+              planBalance={(user === "max" ? 150 : 30) - creditUsed}
+              legacyBenefits={legacyBenefits}
+              hasLegacyBenefits={hasLegacyBenefits}
+              benefitChoice={benefitChoice}
+              onBenefitChoice={setBenefitChoice}
               onPay={() => completePurchase()}
+              onUpgrade={() => choosePlan("max", "pdp")}
+              onChoosePlan={(plan) => choosePlan(plan, "pdp")}
+              onPricing={() => {
+                setModal("none");
+                navigate("pricing");
+              }}
             />
           )}{" "}
           {modal === "cartCheckout" && (
             <Checkout
               models={cartModels}
               user={user}
+              planBalance={(user === "max" ? 150 : 30) - creditUsed}
+              legacyBenefits={legacyBenefits}
+              hasLegacyBenefits={hasLegacyBenefits}
+              benefitChoice={benefitChoice}
+              onBenefitChoice={setBenefitChoice}
               onPay={() =>
                 completePurchase(cartModels.map((model) => model.id))
               }
+              onUpgrade={() => choosePlan("max", "cart")}
+              onChoosePlan={(plan) => choosePlan(plan, "cart")}
+              onPricing={() => {
+                setModal("none");
+                navigate("pricing");
+              }}
+            />
+          )}{" "}
+          {modal === "subscriptionCheckout" && pendingPlan && (
+            <SubscriptionCheckout
+              plan={pendingPlan}
+              upgrading={user === "pro" && pendingPlan === "max"}
+              usedCredits={creditUsed}
+              unlockCount={
+                subscriptionResume === "pdp"
+                  ? 1
+                  : subscriptionResume === "cart"
+                    ? cartModels.length
+                    : 0
+              }
+              onBack={subscriptionResume !== "none" ? () => {
+                setModal(subscriptionResume === "cart" ? "none" : "checkout");
+                setPendingPlan(null);
+                setSubscriptionResume("none");
+              } : undefined}
+              backLabel={subscriptionResume === "cart" ? "Back to cart" : "Back to one-time purchase"}
+              onPay={completeSubscription}
+            />
+          )}{" "}
+          {modal === "subscriptionSuccess" && pendingPlan && (
+            <SubscriptionSuccess
+              title={successNotice.title}
+              message={successNotice.message}
+              onClose={() => {
+                setModal(
+                  subscriptionResume === "pdp"
+                    ? "checkout"
+                    : subscriptionResume === "cart"
+                      ? "cartCheckout"
+                      : "none",
+                );
+                setPendingPlan(null);
+                setSubscriptionResume("none");
+              }}
+              onAccount={() => {
+                setModal("none");
+                setPendingPlan(null);
+                setSubscriptionResume("none");
+                openAccount("Plan & Unlocks");
+              }}
+            />
+          )}{" "}
+          {modal === "license" && (
+            <LicenseSummary
+              onFullTerms={() => {
+                setModal("none");
+                openInfo("license");
+              }}
             />
           )}{" "}
           {modal === "success" && (
             <Success
-              model={selected}
               count={successCount}
+              title={successNotice.title}
+              message={successNotice.message}
               onClose={() => setModal("none")}
+              onDownload={() => {
+                setModal("none");
+                setToast("Download started");
+                setTimeout(() => setToast(""), 1800);
+              }}
               onAssets={() => {
                 setModal("none");
                 openAccount("My Assets");
@@ -803,7 +1369,91 @@ export default function Prototype() {
           )}
         </Modal>
       )}
+      <PrototypeStateControl
+        user={user}
+        hasLegacyBenefits={hasLegacyBenefits}
+        onChange={(state) => {
+          setOrders((items) => items.filter((order) => order.seeded));
+          setBillingRecords((items) => items.filter((record) => record.seeded));
+          setResumingOrderId(null);
+          setFavorites([]);
+          setCart([]);
+          setFreeClaimed(0);
+          setBenefitChoice("auto");
+          setLegacyBenefits({
+            welcomeDownloads: 2,
+            invitationDownloads: 1,
+            vipCredits: 8,
+            downloadCredits: 12,
+            vipActive: true,
+          });
+          if (state === "guest") {
+            setUser("guest");
+            setHasLegacyBenefits(false);
+            setShowHistoricalRecords(false);
+            setCreditUsed(0);
+            setOwned([]);
+          } else if (state === "new") {
+            setUser("basic");
+            setHasLegacyBenefits(false);
+            setShowHistoricalRecords(false);
+            setCreditUsed(0);
+            setOwned([]);
+          } else if (state === "legacy") {
+            setUser("basic");
+            setHasLegacyBenefits(true);
+            setShowHistoricalRecords(true);
+            setCreditUsed(0);
+            setOwned([1]);
+          } else if (state === "pro") {
+            setUser("pro");
+            setHasLegacyBenefits(false);
+            setShowHistoricalRecords(true);
+            setCreditUsed(30);
+            setOwned([1]);
+          } else {
+            setUser("max");
+            setHasLegacyBenefits(false);
+            setShowHistoricalRecords(true);
+            setCreditUsed(148);
+            setOwned([1]);
+          }
+          setAutoRenew(true);
+          setModal("none");
+        }}
+      />
     </div>
+  );
+}
+
+function PrototypeStateControl({
+  user,
+  hasLegacyBenefits,
+  onChange,
+}: {
+  user: UserMode;
+  hasLegacyBenefits: boolean;
+  onChange: (state: "guest" | "new" | "legacy" | "pro" | "max") => void;
+}) {
+  const value =
+    user === "guest"
+      ? "guest"
+      : hasLegacyBenefits
+        ? "legacy"
+        : user === "basic"
+          ? "new"
+          : user;
+  return (
+    <aside className="demo-control" aria-label="Prototype state">
+      <span><i /> Prototype state</span>
+      <select value={value} onChange={(event) => onChange(event.target.value as "guest" | "new" | "legacy" | "pro" | "max")}>
+        <option value="guest">Guest</option>
+        <option value="new">New registered user</option>
+        <option value="legacy">Legacy user</option>
+        <option value="pro">Pro · 0/30 remaining</option>
+        <option value="max">Max · 2/150 remaining</option>
+      </select>
+    </aside>
   );
 }
 
@@ -865,6 +1515,11 @@ function Header({
 }) {
   const nav = [
     {
+      label: "Home",
+      active: page === "home",
+      action: () => onNavigate("home"),
+    },
+    {
       label: "SketchUp Models",
       active: page === "search" && searchType === "SketchUp",
       action: () => onSearchFor("SketchUp models", "SketchUp"),
@@ -899,7 +1554,7 @@ function Header({
         className={`header${page === "search" || page === "home" ? " search-listing-header" : ""}`}
       >
         <button className="logo" onClick={() => onNavigate("home")}>
-          ARCHZZ
+          <ArchzzWordmark />
         </button>
         <nav className={mobileNav ? "nav open" : "nav"}>
           {nav.map((item) => (
@@ -937,6 +1592,13 @@ function Header({
             aria-label="Favorites"
           >
             <Icon name="heart" />
+          </button>
+          <button
+            className="icon-button language-trigger"
+            aria-label="Language"
+            title="Language"
+          >
+            <Icon name="globe" />
           </button>
           <button
             className="icon-button count-wrap"
@@ -1075,7 +1737,7 @@ function Home({
       <ModelSection
         eyebrow=""
         title="Popular models"
-        subtitle="A curated selection."
+        subtitle=""
         items={catalog.filter((model) => model.checked).slice(0, 15)}
         onOpen={onOpen}
         favorites={favorites}
@@ -1094,7 +1756,7 @@ function Home({
           </h2>
           <p>
             20 SketchUp and 20 3ds Max assets refresh daily and stay in My
-            Assets once claimed.
+            Assets after download.
           </p>
           <button onClick={() => onNavigate("free")}>
             Explore today’s selection <Icon name="arrow" />
@@ -1112,7 +1774,7 @@ function Home({
         <div>
           <Icon name="check" size={28} />
           <b>Quality checked</b>
-          <p>Only governed files receive the badge.</p>
+          <p>Verified files and specifications.</p>
         </div>
         <div>
           <span className="trust-symbol">01</span>
@@ -1126,8 +1788,8 @@ function Home({
         </div>
         <div>
           <Icon name="download" size={28} />
-          <b>Files before hype</b>
-          <p>Real formats, versions and sizes—when verified.</p>
+          <b>Clear file details</b>
+          <p>Formats, versions and file sizes shown.</p>
         </div>
       </section>
     </main>
@@ -1157,8 +1819,23 @@ function SearchResults({
   onFavorite: (id: number) => void;
   onCart: (id: number) => void;
 }) {
-  const [renderer, setRenderer] = useState("All renderers"),
+  const [category, setCategory] = useState("All categories"),
+    [keyword, setKeyword] = useState("All keywords"),
+    [renderer, setRenderer] = useState("All renderers"),
     [visibleCount, setVisibleCount] = useState(40);
+  const keywordOptions = [
+      "All keywords",
+      "Modern",
+      "Minimalist",
+      "Wabi-Sabi",
+      "Natural",
+      "Industrial",
+      "Vintage",
+    ],
+    categoryOptions = [
+      "All categories",
+      ...Array.from(new Set(catalog.map((item) => item.category))).sort(),
+    ];
   const channelQueries = ["sketchup models", "3ds max models"],
     broadDemoQueries = [
       "all models",
@@ -1170,7 +1847,7 @@ function SearchResults({
   const normalized = query.trim().toLowerCase(),
     channelEntry = channelQueries.includes(normalized),
     displayTitle = channelEntry
-      ? type === "All software"
+      ? type === "All formats"
         ? "All models"
         : `${type} models`
       : query || "All models",
@@ -1190,15 +1867,30 @@ function SearchResults({
   const filtered = catalog
       .filter((item) => item.checked)
       .filter(matchesQuery)
-      .filter((item) => type === "All software" || item.type === type)
+      .filter((item) => type === "All formats" || item.type === type)
+      .filter(
+        (item) => category === "All categories" || item.category === category,
+      )
+      .filter(
+        (item) =>
+          keyword === "All keywords" ||
+          `${item.title} ${item.category}`
+            .toLowerCase()
+            .includes(keyword.toLowerCase()),
+      )
       .filter(
         (item) => renderer === "All renderers" || item.renderer === renderer,
       ),
     visibleModels = filtered.slice(0, visibleCount);
-  useEffect(() => setVisibleCount(40), [query, type, renderer]);
+  useEffect(
+    () => setVisibleCount(40),
+    [query, type, category, keyword, renderer],
+  );
   const resetFilters = () => {
     onQuery("");
-    onType("All software");
+    onType("All formats");
+    setCategory("All categories");
+    setKeyword("All keywords");
     setRenderer("All renderers");
   };
   return (
@@ -1237,12 +1929,23 @@ function SearchResults({
           <FilterSelect
             value={type}
             onChange={onType}
-            options={["All software", "SketchUp", "3ds Max"]}
+            options={["All formats", "SketchUp", "3ds Max"]}
+          />
+          <FilterSelect
+            value={category}
+            onChange={setCategory}
+            options={categoryOptions}
+          />
+          <FilterSelect
+            value={keyword}
+            onChange={setKeyword}
+            options={keywordOptions}
           />
           <FilterSelect
             value={renderer}
             onChange={setRenderer}
             options={["All renderers", "Corona", "V-Ray"]}
+            disabled={type === "SketchUp"}
           />
         </div>
       </div>
@@ -1300,6 +2003,8 @@ function ProductDetail({
   favorites,
   user,
   creditBalance,
+  legacyBenefits,
+  hasLegacyBenefits,
   favorite,
   onFavorite,
   onFavoriteModel,
@@ -1308,6 +2013,7 @@ function ProductDetail({
   onCartModel,
   onOpen,
   onPricing,
+  onLicense,
 }: {
   model: Model;
   owned: boolean;
@@ -1315,6 +2021,8 @@ function ProductDetail({
   favorites: number[];
   user: UserMode;
   creditBalance: number;
+  legacyBenefits: LegacyBenefits;
+  hasLegacyBenefits: boolean;
   favorite: boolean;
   onFavorite: () => void;
   onFavoriteModel: (id: number) => void;
@@ -1323,6 +2031,7 @@ function ProductDetail({
   onCartModel: (id: number) => void;
   onOpen: (m: Model) => void;
   onPricing: () => void;
+  onLicense: () => void;
 }) {
   const [activeImage, setActiveImage] = useState(0);
   const [pdpAddedToCart, setPdpAddedToCart] = useState(false);
@@ -1347,10 +2056,12 @@ function ProductDetail({
     : owned
       ? "Download again"
       : model.free
-        ? "Claim this model"
-        : subscribed
+        ? "Free download"
+        : subscribed && creditBalance > 0
           ? "Use 1 credit"
-          : "Buy now · $1.99";
+          : user === "pro"
+            ? "Get this model"
+            : "Buy now · $1.99";
   const stats = {
     polygons: (128000 + model.id * 17420).toLocaleString(),
     textures: String(8 + model.id * 3),
@@ -1459,17 +2170,24 @@ function ProductDetail({
               )}
             </div>
             <h1>{model.title}</h1>
-            <p>By ArchZZ Studio · SKU AZ-{String(model.id).padStart(6, "0")}</p>
           </div>
-          <div className="decision-row">
+          <div className={`decision-row ${model.free ? "free-only" : ""}`}>
             <div className="buy-once-price">
+              <div className="access-license-row">
+                <span className={model.free ? "access-label free" : "access-label paid"}>
+                  {model.free ? "FREE" : "PAID"}
+                </span>
+                <button type="button" className="license-link" onClick={onLicense}>
+                  Standard License <span aria-hidden="true">ⓘ</span>
+                </button>
+              </div>
               <strong>{model.free ? "Free" : "$1.99"}</strong>
             </div>
-            <div className="membership-decision">
+            {!model.free && <div className="membership-decision">
               {subscribed ? (
                 <>
                   <span>YOUR PLAN</span>
-                  <strong>1 credit</strong>
+                  <strong>{creditBalance > 0 ? "1 credit" : "No credits left"}</strong>
                   <small>
                     {creditBalance} {user === "max" ? "Max" : "Pro"} credits
                     left
@@ -1488,8 +2206,14 @@ function ProductDetail({
                   </button>
                 </>
               )}
-            </div>
+            </div>}
           </div>
+          {hasLegacyBenefits && !model.free && (
+            <div className="pdp-legacy-note">
+              <b>Legacy benefits available</b>
+              <span>Choose at checkout · expiry dates shown</span>
+            </div>
+          )}
           <section className="asset-details">
             <h2>Asset details</h2>
             <div className="compatibility-row">
@@ -1514,7 +2238,7 @@ function ProductDetail({
             <div className="owned-notice">
               <Icon name="check" />
               <span>
-                <b>In My Assets · Download again uses no additional credit</b>
+                <b>In My Assets · No credit needed</b>
               </span>
             </div>
           )}
@@ -1547,7 +2271,7 @@ function ProductDetail({
       <ModelSection
         eyebrow=""
         title="Related models"
-        subtitle="Similar quality-checked models."
+        subtitle="Similar models."
         items={related}
         onOpen={onOpen}
         favorites={favorites}
@@ -1578,8 +2302,8 @@ function FreePage({
           <p className="kicker light">TODAY’S FREE · REFRESHES 00:00 UTC</p>
           <h1>Choose any 3 models today.</h1>
           <p>
-            Mix 20 SketchUp and 20 3ds Max models; claimed files stay in My
-            Assets.
+            Choose from 20 SketchUp and 20 3ds Max models. Downloaded models stay
+            in My Assets.
           </p>
         </div>
         <div className="free-counter">
@@ -1606,7 +2330,7 @@ function FreePage({
         >
           3ds Max <span>20</span>
         </button>
-        <p>Choose across both tabs · {claimed} claimed today</p>
+        <p>Choose across both tabs · {claimed} downloaded today</p>
       </div>
       <div className="free-grid">
         {todayFreeModels
@@ -1624,14 +2348,14 @@ function FreePage({
                 </small>
                 <button
                   className="claim-button"
-                  disabled={claimed >= 3 || owned.includes(model.id)}
+                  disabled={claimed >= 3 && !owned.includes(model.id)}
                   onClick={() => onClaim(model)}
                 >
                   {owned.includes(model.id)
-                    ? "In My Assets"
+                    ? "Download again"
                     : claimed >= 3
                       ? "Daily limit reached"
-                      : "Claim free"}
+                      : "Free download"}
                 </button>
               </div>
             </div>
@@ -1671,7 +2395,8 @@ function Pricing({
             "Permanent access",
             "Standard commercial license",
           ]}
-          button="Browse models"
+          button="For comparison"
+          current
           onClick={onBrowse}
         />
         <Plan
@@ -1681,9 +2406,8 @@ function Pricing({
           description="For designers working on active projects."
           features={[
             "30 credits each month",
-            "Roll over up to 60",
-            "$0.99 extra credits",
-            "Daily free models included",
+            "Credits reset each billing month",
+            "Unused credits do not roll over",
           ]}
           button={user === "pro" ? "Current plan" : "Choose Pro"}
           current={user === "pro"}
@@ -1697,9 +2421,8 @@ function Pricing({
           description="For high-volume studios and visualizers."
           features={[
             "150 credits each month",
-            "Roll over up to 300",
-            "$0.99 extra credits",
-            "Daily free models included",
+            "Credits reset each billing month",
+            "Unused credits do not roll over",
           ]}
           button={user === "max" ? "Current plan" : "Choose Max"}
           current={user === "max"}
@@ -1707,7 +2430,7 @@ function Pricing({
         />
       </div>
       <section className="pricing-rules">
-        <h2>Clear rules, before you subscribe.</h2>
+        <h2>Subscription rules</h2>
         {[
           [
             "What happens to unlocked models?",
@@ -1715,11 +2438,7 @@ function Pricing({
           ],
           [
             "Do unused credits roll over?",
-            "Up to 60 on Pro and 300 on Max while subscribed.",
-          ],
-          [
-            "Can I buy more?",
-            "Subscribers can buy packs of 10 extra credits for $0.99 each.",
+            "No. Unused credits expire at the end of each billing month.",
           ],
           [
             "Can I cancel?",
@@ -1739,24 +2458,144 @@ function Pricing({
   );
 }
 
+function SubscriptionOffer({
+  onChoose,
+  onLearnMore,
+}: {
+  onChoose: (plan: "pro" | "max") => void;
+  onLearnMore: () => void;
+}) {
+  return (
+    <div className="subscription-offer">
+      <div className="subscription-offer-head">
+        <span>SAVE WITH A PLAN</span>
+        <button type="button" onClick={onLearnMore}>Learn more</button>
+      </div>
+      <button type="button" className="subscription-offer-row" onClick={() => onChoose("pro")}>
+        <span><b>Pro</b><small>$14.99 / month</small></span>
+        <strong>≈ $0.50 / model</strong>
+      </button>
+      <button type="button" className="subscription-offer-row" onClick={() => onChoose("max")}>
+        <span><b>Max</b><small>$49.99 / month</small></span>
+        <strong>≈ $0.33 / model</strong>
+      </button>
+    </div>
+  );
+}
+
+function BenefitPicker({
+  id,
+  user,
+  planBalance,
+  legacyBenefits,
+  hasLegacyBenefits,
+  value,
+  onChange,
+}: {
+  id: string;
+  user: UserMode;
+  planBalance: number;
+  legacyBenefits: LegacyBenefits;
+  hasLegacyBenefits: boolean;
+  value: BenefitChoice;
+  onChange: (choice: BenefitChoice) => void;
+}) {
+  const selected = resolveBenefitChoice(
+    value,
+    user,
+    legacyBenefits,
+    planBalance,
+    hasLegacyBenefits,
+  );
+  return (
+    <div className="benefit-picker">
+      <div className="benefit-picker-head">
+        <b>Payment option</b>
+        {hasLegacyBenefits && <span>Expiring soonest first</span>}
+      </div>
+      {hasLegacyBenefits && legacyBenefitMeta.map((item) => {
+        const balance = legacyBenefits[item.balanceKey];
+        if (balance <= 0) return null;
+        return (
+          <label key={item.key} className={selected === item.key ? "selected" : ""}>
+            <input
+              type="radio"
+              name={`${id}-benefit`}
+              checked={selected === item.key}
+              onChange={() => onChange(item.key)}
+            />
+            <span><b>{item.label}</b><small>Expires {item.expires}</small></span>
+            <strong>{balance} left</strong>
+          </label>
+        );
+      })}
+      {(user === "pro" || user === "max") && planBalance > 0 && (
+        <label className={selected === "planCredits" ? "selected" : ""}>
+          <input
+            type="radio"
+            name={`${id}-benefit`}
+            checked={selected === "planCredits"}
+            onChange={() => onChange("planCredits")}
+          />
+          <span><b>{user === "max" ? "Max" : "Pro"} credits</b><small>Cycle ends Oct 07, 2026</small></span>
+          <strong>{planBalance} left</strong>
+        </label>
+      )}
+      <label className={selected === "cash" ? "selected" : ""}>
+        <input
+          type="radio"
+          name={`${id}-benefit`}
+          checked={selected === "cash"}
+          onChange={() => onChange("cash")}
+        />
+        <span><b>Cash payment</b><small>Permanent access</small></span>
+        <strong>$1.99 / model</strong>
+      </label>
+    </div>
+  );
+}
+
 function CartPage({
   items,
   user,
   creditBalance,
+  legacyBenefits,
+  hasLegacyBenefits,
+  benefitChoice,
+  onBenefitChoice,
   onRemove,
   onOpen,
   onCheckout,
+  onChoosePlan,
+  onPricing,
 }: {
   items: Model[];
   user: UserMode;
   creditBalance: number;
+  legacyBenefits: LegacyBenefits;
+  hasLegacyBenefits: boolean;
+  benefitChoice: BenefitChoice;
+  onBenefitChoice: (choice: BenefitChoice) => void;
   onRemove: (id: number) => void;
   onOpen: (m: Model) => void;
   onCheckout: () => void;
+  onChoosePlan: (plan: "pro" | "max") => void;
+  onPricing: () => void;
 }) {
   const cash = items.length * 1.99,
-    subscribed = user === "pro" || user === "max",
-    plan = user === "max" ? "Max" : "Pro";
+    allocation = allocateBenefits(
+      items.length,
+      user,
+      legacyBenefits,
+      creditBalance,
+      hasLegacyBenefits,
+      benefitChoice,
+    ),
+    legacyUsed =
+      allocation.welcome +
+      allocation.invitation +
+      allocation.vipCredits +
+      allocation.downloadCredits;
   return (
     <main className="cart-page">
       <div className="cart-title">
@@ -1767,8 +2606,8 @@ function CartPage({
       {items.length === 0 ? (
         <div className="empty-state">
           <Icon name="cart" size={38} />
-          <h2>Your cart is ready for a project.</h2>
-          <p>Add paid models to compare and purchase them together.</p>
+          <h2>Your cart is empty.</h2>
+          <p>Add paid models to buy them together.</p>
         </div>
       ) : (
         <div className="cart-layout">
@@ -1798,31 +2637,47 @@ function CartPage({
               <span>{items.length} models</span>
               <b>${cash.toFixed(2)}</b>
             </div>
-            {subscribed ? (
-              <div className="recommend-box">
-                <span>MEMBER ACCESS</span>
-                <b>
-                  Use {items.length} {plan} credits
-                </b>
-                <p>{creditBalance} credits available.</p>
+            {(hasLegacyBenefits || user === "pro" || user === "max") && (
+              <BenefitPicker
+                id="cart"
+                user={user}
+                planBalance={creditBalance}
+                legacyBenefits={legacyBenefits}
+                hasLegacyBenefits={hasLegacyBenefits}
+                value={benefitChoice}
+                onChange={onBenefitChoice}
+              />
+            )}
+            {user === "pro" && allocation.cashModels > 0 && (
+              <div className="recommend-box upgrade-recommendation">
+                <span>RECOMMENDED</span>
+                <b>Upgrade to Max</b>
+                <p>$35 today · {Math.max(0, 120 + creditBalance)} credits available</p>
+                <button type="button" onClick={() => onChoosePlan("max")}>
+                  Choose Max
+                </button>
               </div>
-            ) : (
+            )}
+            {user === "basic" && allocation.cashModels > 0 && (
+              <SubscriptionOffer
+                onChoose={onChoosePlan}
+                onLearnMore={onPricing}
+              />
+            )}
+            {!legacyUsed && !allocation.planCredits && user !== "pro" && (
               <div className="recommend-box">
                 <span>BUY ONCE</span>
                 <b>${cash.toFixed(2)}</b>
-                <p>Permanent access to every purchased model.</p>
+                <p>Permanent access.</p>
               </div>
             )}
             <div className="total">
-              <span>{subscribed ? "Credits required" : "Amount due"}</span>
-              <strong>
-                {subscribed ? items.length : `$${cash.toFixed(2)}`}
-              </strong>
+              <span>Amount due</span>
+              <strong>${allocation.cashAmount.toFixed(2)}</strong>
             </div>
             <button className="primary-cta" onClick={onCheckout}>
               Review order
             </button>
-            <small>No payment or file delivery is processed here</small>
           </aside>
         </div>
       )}
@@ -1839,10 +2694,16 @@ function Assets({
   freeClaimed,
   creditUsed,
   orders,
+  billingRecords,
+  legacyBenefits,
+  hasLegacyBenefits,
+  autoRenew,
   onOpen,
   onBrowse,
   onPricing,
+  onToggleRenew,
   onDemoDownload,
+  onOrderAction,
   onAccountNotice,
 }: {
   tab: AccountTab;
@@ -1853,10 +2714,16 @@ function Assets({
   freeClaimed: number;
   creditUsed: number;
   orders: OrderRecord[];
+  billingRecords: BillingRecord[];
+  legacyBenefits: LegacyBenefits;
+  hasLegacyBenefits: boolean;
+  autoRenew: boolean;
   onOpen: (m: Model) => void;
   onBrowse: () => void;
   onPricing: () => void;
+  onToggleRenew: () => void;
   onDemoDownload: () => void;
+  onOrderAction: (order: OrderRecord) => void;
   onAccountNotice: (message: string) => void;
 }) {
   const items = tab === "Favorites" ? favorites : owned;
@@ -1896,20 +2763,31 @@ function Assets({
             user={user}
             creditUsed={creditUsed}
             freeClaimed={freeClaimed}
+            legacyBenefits={legacyBenefits}
+            hasLegacyBenefits={hasLegacyBenefits}
+            autoRenew={autoRenew}
             onPricing={onPricing}
-            onCancel={() =>
-              onAccountNotice("Subscription cancellation is not available here")
-            }
+            onToggleRenew={onToggleRenew}
           />
         ) : tab === "My Orders" ? (
-          orders.length ? (
-            <OrderHistory orders={orders} models={catalog} onOpen={onOpen} />
+          orders.length || billingRecords.length ? (
+            <OrderHistory
+              orders={orders}
+              billingRecords={
+                hasLegacyBenefits
+                  ? billingRecords
+                  : billingRecords.filter((record) => record.kind === "Subscription")
+              }
+              models={catalog}
+              onOpen={onOpen}
+              onAction={onOrderAction}
+            />
           ) : (
             <AccountEmptyState
               icon="cart"
               title="No orders yet"
-              text="Completed purchases and model unlocks will appear here with their access status."
-              note="Your order history will stay with your account"
+              text="Purchases and model unlocks appear here."
+              note="Access status is shown per model"
               onBrowse={onBrowse}
             />
           )
@@ -1930,7 +2808,7 @@ function Assets({
                 <b>{item.title}</b>
                 {tab === "My Assets" ? (
                   <button className="download-button" onClick={onDemoDownload}>
-                    <Icon name="download" /> Download again
+                  <Icon name="download" /> Download
                   </button>
                 ) : (
                   <button
@@ -1953,13 +2831,13 @@ function Assets({
             }
             text={
               tab === "Favorites"
-                ? "Use the heart on any model to keep a shortlist for your next project."
-                : "Models you buy or claim will stay here, ready to access again."
+                ? "Select the heart to save a model."
+                : "Purchased and free models appear here."
             }
             note={
               tab === "Favorites"
                 ? "Your shortlist is private"
-                : "Purchases and claimed free models appear automatically"
+                : "Available anytime"
             }
             onBrowse={onBrowse}
           />
@@ -1973,53 +2851,153 @@ function PlanUnlocks({
   user,
   creditUsed,
   freeClaimed,
+  legacyBenefits,
+  hasLegacyBenefits,
+  autoRenew,
   onPricing,
-  onCancel,
+  onToggleRenew,
 }: {
   user: UserMode;
   creditUsed: number;
   freeClaimed: number;
+  legacyBenefits: LegacyBenefits;
+  hasLegacyBenefits: boolean;
+  autoRenew: boolean;
   onPricing: () => void;
-  onCancel: () => void;
+  onToggleRenew: () => void;
 }) {
+  const subscribed = user === "pro" || user === "max";
+  const planName = user === "max" ? "Max" : user === "pro" ? "Pro" : "Basic";
+  const planCredits = subscribed ? (user === "max" ? 150 : 30) - creditUsed : 0;
+  const planTotal = user === "max" ? 150 : 30;
+  const usedPercent = subscribed
+    ? Math.min(100, Math.round((creditUsed / planTotal) * 100))
+    : 0;
   return (
     <div className="plan-account">
       <section className="current-plan-card basic-plan-card">
         <div>
-          <h2>Basic</h2>
-          <button onClick={onPricing}>View Pro &amp; Max</button>
+          <h2>{planName}</h2>
+          <button onClick={onPricing}>
+            {subscribed ? "Manage plan" : "View Pro & Max"}
+          </button>
         </div>
-        <p>Get lower per-model pricing with a Pro or Max subscription.</p>
+        <p>
+          {subscribed
+            ? `${planCredits} plan credits remaining this month.`
+            : "Subscribe for lower per-model pricing."}
+        </p>
+        {subscribed && (
+          <>
+            <div className="plan-progress" aria-label={`${planCredits} of ${planTotal} credits remaining`}>
+              <div>
+                <span>USED {creditUsed}</span>
+                <span>REMAINING {planCredits}</span>
+              </div>
+              <i><b style={{ width: `${usedPercent}%` }} /></i>
+              <small>
+                {autoRenew
+                  ? `Sep 07–Oct 07 · Next charge ${user === "max" ? "$49.99" : "$14.99"}`
+                  : "Sep 07–Oct 07 · Ends Oct 07, 2026"}
+              </small>
+            </div>
+            <div className="plan-renewal-row">
+              <span>{autoRenew ? "Auto-renewal is on" : "Cancels Oct 07, 2026"}</span>
+              <button className="cancel-plan" onClick={onToggleRenew}>
+                {autoRenew ? "Cancel renewal" : "Restore renewal"}
+              </button>
+            </div>
+          </>
+        )}
       </section>
       <div className="free-credit-row">
         <span>TODAY’S FREE</span>
         <b>{3 - freeClaimed} of 3 remaining</b>
         <small>Refreshes daily at 00:00 UTC</small>
       </div>
+      {hasLegacyBenefits && <section className="legacy-benefits">
+        <div className="legacy-heading">
+          <h3>Legacy benefits</h3>
+          <strong>Legacy user</strong>
+        </div>
+        <div className="legacy-grid">
+          <div>
+            <span>Welcome credit</span>
+            <b>{legacyBenefits.welcomeDownloads} remaining</b>
+            <small>Expires Sep 10, 2026</small>
+          </div>
+          <div>
+            <span>Invitation credit</span>
+            <b>{legacyBenefits.invitationDownloads} remaining</b>
+            <small>Expires Sep 30, 2026</small>
+          </div>
+          <div>
+            <span>Legacy VIP credits</span>
+            <b>{legacyBenefits.vipCredits} remaining</b>
+            <small>Expires Oct 07, 2026</small>
+          </div>
+          <div>
+            <span>Download Credits</span>
+            <b>{legacyBenefits.downloadCredits} remaining</b>
+            <small>Expires Dec 31, 2026</small>
+          </div>
+        </div>
+      </section>}
     </div>
   );
 }
 
 function OrderHistory({
   orders,
+  billingRecords,
   models,
   onOpen,
+  onAction,
 }: {
   orders: OrderRecord[];
+  billingRecords: BillingRecord[];
   models: Model[];
   onOpen: (model: Model) => void;
+  onAction: (order: OrderRecord) => void;
 }) {
+  const [view, setView] = useState<"models" | "billing">("models");
   return (
     <div className="order-history">
+      <div className="history-tabs">
+        <button
+          className={view === "models" ? "active" : ""}
+          onClick={() => setView("models")}
+        >
+          Model access
+        </button>
+        <button
+          className={view === "billing" ? "active" : ""}
+          onClick={() => setView("billing")}
+        >
+          Billing
+        </button>
+      </div>
       <div className="order-history-head">
         <span>
-          {orders.length} completed {orders.length === 1 ? "record" : "records"}
+          {view === "models" ? orders.length : billingRecords.length}{" "}
+          {(view === "models" ? orders.length : billingRecords.length) === 1
+            ? "record"
+            : "records"}
         </span>
-        <small>Purchases, credits and free claims</small>
+        <small>
+          {view === "models"
+            ? "Purchases, credits and free downloads"
+            : "Subscriptions and legacy paid benefits"}
+        </small>
       </div>
-      {orders.map((order) => {
+      {view === "models" && orders.map((order) => {
         const model = models.find((item) => item.id === order.modelId);
         if (!model) return null;
+        const parentOrderId = order.orderId || order.id;
+        const siblingItems = orders.filter(
+          (item) => (item.orderId || item.id) === parentOrderId,
+        );
+        const itemPosition = siblingItems.findIndex((item) => item.id === order.id) + 1;
         return (
           <article key={order.id}>
             <button className="order-model" onClick={() => onOpen(model)}>
@@ -2035,7 +3013,10 @@ function OrderHistory({
             </button>
             <div>
               <span>Order</span>
-              <b>{order.id.split("-").slice(-2).join("-")}</b>
+              <b>{parentOrderId.replace("AZ-", "")}</b>
+              {siblingItems.length > 1 && (
+                <small>Item {itemPosition} of {siblingItems.length}</small>
+              )}
             </div>
             <div>
               <span>Date</span>
@@ -2045,10 +3026,49 @@ function OrderHistory({
               <span>Access</span>
               <b>{order.access}</b>
             </div>
-            <strong className="order-status">Completed</strong>
+            <div className="order-state">
+              <strong
+                className={`order-status ${String(order.status || "Paid").toLowerCase().replace(" ", "-")}`}
+              >
+                {order.status || "Paid"}
+              </strong>
+              {order.status === "Pending" && (
+                <button className="order-action" onClick={() => onAction(order)}>Continue payment</button>
+              )}
+              {order.status === "Failed" && (
+                <button className="order-action" onClick={() => onAction(order)}>Retry payment</button>
+              )}
+              {order.status === "Processing" && <small className="order-wait">Checking payment status…</small>}
+            </div>
           </article>
         );
       })}
+      {view === "billing" &&
+        billingRecords.map((record) => (
+          <article className="billing-record" key={record.id}>
+            <div className="billing-name">
+              <small>{record.kind}</small>
+              <b>{record.title}</b>
+            </div>
+            <div>
+              <span>Reference</span>
+              <b>{record.id.replace("BILL-", "")}</b>
+            </div>
+            <div>
+              <span>Date</span>
+              <b>{record.date}</b>
+            </div>
+            <div>
+              <span>Amount</span>
+              <b>{record.amount}</b>
+            </div>
+            <strong
+              className={`order-status ${record.status.toLowerCase().replace(" ", "-")}`}
+            >
+              {record.status}
+            </strong>
+          </article>
+        ))}
     </div>
   );
 }
@@ -2262,7 +3282,7 @@ function ModelCard({
         <button className="model-title" onClick={() => onOpen(model)}>
           {model.title}
         </button>
-        <p>{model.category} · ArchZZ Studio</p>
+        <p>{model.category}</p>
         <div className="model-bottom">
           <strong>
             {unavailable
@@ -2340,26 +3360,15 @@ function AutoLoadMore({
   hasMore: boolean;
   onLoad: () => void;
 }) {
-  const marker = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const node = marker.current;
-    if (!node || !hasMore) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) onLoad();
-      },
-      { rootMargin: "240px 0px" },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasMore, onLoad]);
   return (
-    <div
-      ref={marker}
-      className={hasMore ? "auto-load-more" : "auto-load-more complete"}
-      aria-live="polite"
-    >
-      <span>{hasMore ? "Load more" : "All results shown"}</span>
+    <div className={hasMore ? "auto-load-more" : "auto-load-more complete"}>
+      {hasMore ? (
+        <button type="button" onClick={onLoad}>
+          Load more
+        </button>
+      ) : (
+        <span>All results shown</span>
+      )}
     </div>
   );
 }
@@ -2589,8 +3598,8 @@ function Modal({
 function Auth({ onContinue }: { onContinue: () => void }) {
   return (
     <div className="auth-modal">
-      <p className="kicker">CONTINUE YOUR TASK</p>
-      <h2>Sign in to save, claim or purchase models.</h2>
+      <p className="kicker">SIGN IN</p>
+      <h2>Sign in to continue.</h2>
       <button className="google-button" onClick={onContinue}>
         <img src="/google-g.svg" alt="" aria-hidden="true" />
         Continue with Google
@@ -2607,40 +3616,134 @@ function Auth({ onContinue }: { onContinue: () => void }) {
       <button className="primary-cta" onClick={onContinue}>
         Continue with email
       </button>
-      <small>We’ll return you to the same action after sign-in.</small>
+      <small>You’ll return here after sign-in.</small>
     </div>
   );
 }
+
+function LicenseSummary({ onFullTerms }: { onFullTerms: () => void }) {
+  return (
+    <div className="license-modal">
+      <p className="kicker">STANDARD LICENSE</p>
+      <h2>Use models in your projects</h2>
+      <ul className="license-allowed">
+        <li><Icon name="check" size={17} /> Personal and commercial projects</li>
+        <li><Icon name="check" size={17} /> Rendered images and videos</li>
+      </ul>
+      <div className="license-prohibited">
+        <b>Not allowed</b>
+        <p>Redistributing, sharing or reselling the source model files.</p>
+      </div>
+      <button className="text-button" type="button" onClick={onFullTerms}>
+        View full license terms
+      </button>
+    </div>
+  );
+}
+
 function Checkout({
   models,
   user,
+  planBalance,
+  legacyBenefits,
+  hasLegacyBenefits,
+  benefitChoice,
+  onBenefitChoice,
   onPay,
+  onUpgrade,
+  onChoosePlan,
+  onPricing,
 }: {
   models: Model[];
   user: UserMode;
+  planBalance: number;
+  legacyBenefits: LegacyBenefits;
+  hasLegacyBenefits: boolean;
+  benefitChoice: BenefitChoice;
+  onBenefitChoice: (choice: BenefitChoice) => void;
   onPay: () => void;
+  onUpgrade: () => void;
+  onChoosePlan: (plan: "pro" | "max") => void;
+  onPricing: () => void;
 }) {
-  const subscribed = user === "pro" || user === "max",
-    total = models.length * 1.99;
+  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "Antom">("PayPal");
+  const allocation = allocateBenefits(
+      models.length,
+      user,
+      legacyBenefits,
+      planBalance,
+      hasLegacyBenefits,
+      benefitChoice,
+    ),
+    sources = allocationSources(allocation),
+    cashUnitPrice = allocation.cashModels
+      ? allocation.cashAmount / allocation.cashModels
+      : 1.99,
+    selectedSource = resolveBenefitChoice(
+      benefitChoice,
+      user,
+      legacyBenefits,
+      planBalance,
+      hasLegacyBenefits,
+    );
   return (
     <div className="checkout-modal">
       <p className="kicker">ORDER REVIEW</p>
-      <h2>Review your model access</h2>
-      {models.map((model) => (
+      <h2>Review order</h2>
+      {models.map((model, index) => (
         <div className="checkout-item" key={model.id}>
           <img src={model.image} alt="" />
           <span>
             <b>{model.title}</b>
             <small>{model.type} · Permanent access</small>
           </span>
-          <strong>{subscribed ? "1 credit" : "$1.99"}</strong>
+          <strong>
+            {sources[index] === "cash" ? `$${cashUnitPrice.toFixed(2)}` : "Covered"}
+          </strong>
         </div>
       ))}
-      {!subscribed && (
+      {(hasLegacyBenefits || user === "pro" || user === "max") && (
+        <BenefitPicker
+          id="checkout"
+          user={user}
+          planBalance={planBalance}
+          legacyBenefits={legacyBenefits}
+          hasLegacyBenefits={hasLegacyBenefits}
+          value={selectedSource}
+          onChange={onBenefitChoice}
+        />
+      )}
+      {allocation.cashModels > 0 && allocation.vipDiscount > 0 ? (
+        <div className="checkout-lines">
+          <span><b>Subtotal</b><strong>${(models.length * 1.99).toFixed(2)}</strong></span>
+          <span><b>Legacy VIP discount</b><strong>−${allocation.vipDiscount.toFixed(2)}</strong></span>
+        </div>
+      ) : null}
+      <div className="checkout-total">
+        <span>Due today</span>
+        <strong>${allocation.cashAmount.toFixed(2)}</strong>
+      </div>
+      {user === "pro" && allocation.cashModels > 0 && (
+        <div className="checkout-upgrade-option">
+          <span>RECOMMENDED</span>
+          <b>Upgrade to Max</b>
+          <small>$35 today · {Math.max(0, 120 + planBalance)} credits available</small>
+          <button type="button" onClick={onUpgrade}>Choose Max</button>
+        </div>
+      )}
+      {user === "basic" && allocation.cashModels > 0 && (
+        <SubscriptionOffer onChoose={onChoosePlan} onLearnMore={onPricing} />
+      )}
+      {allocation.cashAmount > 0 && (
         <>
           <p className="payment-section-title">Select payment method</p>
           <label className="payment-option">
-            <input type="radio" name="payment-channel" defaultChecked />
+            <input
+              type="radio"
+              name="payment-channel"
+              checked={paymentMethod === "PayPal"}
+              onChange={() => setPaymentMethod("PayPal")}
+            />
             <img
               className="payment-logo paypal-logo"
               src="/paypal-logo.png"
@@ -2649,7 +3752,12 @@ function Checkout({
             <b>PayPal</b>
           </label>
           <label className="payment-option">
-            <input type="radio" name="payment-channel" />
+            <input
+              type="radio"
+              name="payment-channel"
+              checked={paymentMethod === "Antom"}
+              onChange={() => setPaymentMethod("Antom")}
+            />
             <img
               className="payment-logo antom-logo"
               src="/antom-logo.png"
@@ -2660,22 +3768,148 @@ function Checkout({
         </>
       )}
       <button className="primary-cta" onClick={onPay}>
-        {subscribed
-          ? `Confirm ${models.length} credit${models.length > 1 ? "s" : ""}`
-          : "Confirm purchase"}
+        {allocation.cashAmount > 0
+          ? `Continue to ${paymentMethod}`
+          : "Confirm access"}
       </button>
+      <p className="legal-note">
+        By continuing, you agree to the Terms, Refund Policy and Standard License.
+        Final amount is shown by your payment provider.
+      </p>
+    </div>
+  );
+}
+
+function SubscriptionCheckout({
+  plan,
+  upgrading,
+  usedCredits,
+  unlockCount,
+  onBack,
+  backLabel = "Back to one-time purchase",
+  onPay,
+}: {
+  plan: "pro" | "max";
+  upgrading: boolean;
+  usedCredits: number;
+  unlockCount: number;
+  onBack?: () => void;
+  backLabel?: string;
+  onPay: () => void;
+}) {
+  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "Antom" | "DANA">("PayPal");
+  const planName = plan === "max" ? "Max" : "Pro";
+  const price = upgrading ? 35 : plan === "max" ? 49.99 : 14.99;
+  const renewalPrice = plan === "max" ? 49.99 : 14.99;
+  const credits = plan === "max" ? 150 : 30;
+  return (
+    <div className="checkout-modal subscription-checkout">
+      {onBack && (
+        <button type="button" className="checkout-back" onClick={onBack}>
+          <span aria-hidden="true">←</span> {backLabel}
+        </button>
+      )}
+      <p className="kicker">SUBSCRIPTION CHECKOUT</p>
+      <h2>{upgrading ? "Upgrade to Max" : `Start ${planName}`}</h2>
+      <div className="subscription-summary">
+        <span>{planName} plan</span>
+        <b>
+          {upgrading
+            ? `${Math.max(0, credits - usedCredits)} credits available`
+            : `${credits} credits / month`}
+        </b>
+        <small>
+          {unlockCount > 0
+            ? `${unlockCount} credit${unlockCount > 1 ? "s" : ""} used for this order after payment.`
+            : upgrading
+            ? "Used Pro credits carry over."
+            : "Unlocked models stay in My Assets."}
+        </small>
+      </div>
+      <div className="checkout-total">
+        <span>Due today</span>
+        <strong>${price.toFixed(2)}</strong>
+      </div>
+      <p className="payment-section-title">Subscription payment method</p>
+      <label className="payment-option">
+        <input
+          type="radio"
+          name="subscription-payment"
+          checked={paymentMethod === "PayPal"}
+          onChange={() => setPaymentMethod("PayPal")}
+        />
+        <img className="payment-logo paypal-logo" src="/paypal-logo.png" alt="PayPal" />
+        <b>PayPal</b>
+      </label>
+      <label className="payment-option">
+        <input
+          type="radio"
+          name="subscription-payment"
+          checked={paymentMethod === "Antom"}
+          onChange={() => setPaymentMethod("Antom")}
+        />
+        <img className="payment-logo antom-logo" src="/antom-logo.png" alt="Antom" />
+        <b>Antom</b>
+      </label>
+      <label className="payment-option">
+        <input
+          type="radio"
+          name="subscription-payment"
+          checked={paymentMethod === "DANA"}
+          onChange={() => setPaymentMethod("DANA")}
+        />
+        <span className="dana-wordmark">DANA</span>
+        <b>DANA</b>
+        <small>Processed by Antom</small>
+      </label>
+      <div className="renewal-note">
+        Renews monthly at ${renewalPrice.toFixed(2)} · Cancel anytime
+      </div>
+      <button className="primary-cta" onClick={onPay}>
+        Continue to {paymentMethod}
+      </button>
+      <p className="legal-note">
+        By continuing, you agree to recurring billing and the Terms.
+        Final amount is shown by your payment provider.
+      </p>
+    </div>
+  );
+}
+
+function SubscriptionSuccess({
+  title,
+  message,
+  onClose,
+  onAccount,
+}: {
+  title: string;
+  message: string;
+  onClose: () => void;
+  onAccount: () => void;
+}) {
+  return (
+    <div className="success-modal">
+      <span className="success-icon"><Icon name="check" size={34} /></span>
+      <h2>{title}</h2>
+      <p>{message}</p>
+      <button className="primary-cta" onClick={onClose}>Continue browsing</button>
+      <button className="text-button" onClick={onAccount}>View Plan &amp; Unlocks</button>
     </div>
   );
 }
 function Success({
-  model,
   count,
+  title,
+  message,
   onClose,
+  onDownload,
   onAssets,
 }: {
-  model: Model;
   count: number;
+  title: string;
+  message: string;
   onClose: () => void;
+  onDownload: () => void;
   onAssets: () => void;
 }) {
   return (
@@ -2683,19 +3917,17 @@ function Success({
       <span className="success-icon">
         <Icon name="check" size={34} />
       </span>
-      <h2>
-        {count > 1
-          ? `${count} models are now in My Assets.`
-          : `${model.title} is now in My Assets.`}
-      </h2>
-      <p>
-        No file download has started because file delivery is not connected.
-      </p>
-      <button className="primary-cta" onClick={onClose}>
-        <Icon name="download" /> Download again
+      <h2>{title}</h2>
+      <p>{message}</p>
+      <button className="primary-cta" onClick={count > 1 ? onAssets : onDownload}>
+        {count > 1 ? (
+          <>View My Assets</>
+        ) : (
+          <><Icon name="download" /> Download model</>
+        )}
       </button>
-      <button className="text-button" onClick={onAssets}>
-        Go to My Assets
+      <button className="text-button" onClick={count > 1 ? onClose : onAssets}>
+        {count > 1 ? "Continue browsing" : "Go to My Assets"}
       </button>
     </div>
   );
