@@ -2448,7 +2448,7 @@ body{font-family:"Helvetica Neue",Arial,sans-serif}
   font-size:13px;
 }
 
-/* Legacy benefit choice: one benefit per order, ordered by expiry. */
+/* Benefits can be combined within one order and are applied by expiry. */
 .benefit-picker{
   margin:16px 0;
   padding:14px;
@@ -2470,7 +2470,8 @@ body{font-family:"Helvetica Neue",Arial,sans-serif}
   color:#777;
   font-size:11px;
 }
-.benefit-picker>label{
+.benefit-picker>label,
+.benefit-cash-row{
   min-height:54px;
   margin-top:7px;
   padding:9px 11px;
@@ -2480,7 +2481,13 @@ body{font-family:"Helvetica Neue",Arial,sans-serif}
   gap:10px;
   border:1px solid #e3dfd9;
   background:#fff;
+}
+.benefit-picker>label{
   cursor:pointer;
+}
+.benefit-cash-row{
+  grid-template-columns:1fr auto;
+  color:#666;
 }
 .benefit-picker>label.selected{
   border-color:#8f1818;
@@ -2492,21 +2499,25 @@ body{font-family:"Helvetica Neue",Arial,sans-serif}
   margin:0;
   accent-color:#8f1818;
 }
-.benefit-picker label>span{
+.benefit-picker label>span,
+.benefit-cash-row>span{
   min-width:0;
   display:flex;
   flex-direction:column;
   gap:4px;
 }
-.benefit-picker label>span b{
+.benefit-picker label>span b,
+.benefit-cash-row>span b{
   font-size:13px;
   font-weight:600;
 }
-.benefit-picker label>span small{
+.benefit-picker label>span small,
+.benefit-cash-row>span small{
   color:#777;
   font-size:12px;
 }
-.benefit-picker label>strong{
+.benefit-picker label>strong,
+.benefit-cash-row>strong{
   color:#333;
   font-size:12px;
   font-weight:600;

@@ -75,13 +75,18 @@ type LegacyBenefits = {
   vipActive: boolean;
 };
 type BenefitChoice =
-  | "auto"
   | "welcome"
   | "invitation"
   | "vipCredits"
   | "downloadCredits"
-  | "planCredits"
-  | "cash";
+  | "planCredits";
+const defaultBenefitChoices: BenefitChoice[] = [
+  "welcome",
+  "invitation",
+  "vipCredits",
+  "downloadCredits",
+  "planCredits",
+];
 const legacyBenefitMeta = [
   { key: "welcome" as const, balanceKey: "welcomeDownloads" as const, label: "Welcome credit", expires: "Sep 10, 2026" },
   { key: "invitation" as const, balanceKey: "invitationDownloads" as const, label: "Invitation credit", expires: "Sep 30, 2026" },
@@ -107,30 +112,13 @@ type BenefitAllocation = {
     | "mixed";
 };
 
-function resolveBenefitChoice(
-  choice: BenefitChoice,
-  user: UserMode,
-  benefits: LegacyBenefits,
-  planBalance: number,
-  hasLegacyBenefits: boolean,
-): Exclude<BenefitChoice, "auto"> {
-  if (choice !== "auto") return choice;
-  if (hasLegacyBenefits) {
-    const nearest = legacyBenefitMeta.find((item) => benefits[item.balanceKey] > 0);
-    if (nearest) return nearest.key;
-  }
-  return (user === "pro" || user === "max") && planBalance > 0
-    ? "planCredits"
-    : "cash";
-}
-
 function allocateBenefits(
   count: number,
   user: UserMode,
   benefits: LegacyBenefits,
   planBalance: number,
   hasLegacyBenefits = false,
-  choice: BenefitChoice = "auto",
+  choices: BenefitChoice[] = defaultBenefitChoices,
 ): BenefitAllocation {
   let remaining = count;
   const take = (available: number) => {
@@ -138,18 +126,11 @@ function allocateBenefits(
     remaining -= used;
     return used;
   };
-  const selectedChoice = resolveBenefitChoice(
-    choice,
-    user,
-    benefits,
-    planBalance,
-    hasLegacyBenefits,
-  );
-  const welcome = selectedChoice === "welcome" && hasLegacyBenefits ? take(benefits.welcomeDownloads) : 0;
-  const invitation = selectedChoice === "invitation" && hasLegacyBenefits ? take(benefits.invitationDownloads) : 0;
-  const vipCredits = selectedChoice === "vipCredits" && hasLegacyBenefits ? take(benefits.vipCredits) : 0;
-  const downloadCredits = selectedChoice === "downloadCredits" && hasLegacyBenefits ? take(benefits.downloadCredits) : 0;
-  const planCredits = selectedChoice === "planCredits" && (user === "pro" || user === "max")
+  const welcome = choices.includes("welcome") && hasLegacyBenefits ? take(benefits.welcomeDownloads) : 0;
+  const invitation = choices.includes("invitation") && hasLegacyBenefits ? take(benefits.invitationDownloads) : 0;
+  const vipCredits = choices.includes("vipCredits") && hasLegacyBenefits ? take(benefits.vipCredits) : 0;
+  const downloadCredits = choices.includes("downloadCredits") && hasLegacyBenefits ? take(benefits.downloadCredits) : 0;
+  const planCredits = choices.includes("planCredits") && (user === "pro" || user === "max")
     ? take(planBalance)
     : 0;
   const cashModels = remaining;
@@ -649,14 +630,16 @@ export default function Prototype() {
   const [searchType, setSearchType] = useState("All formats"),
     [accountTab, setAccountTab] = useState<AccountTab>("My Assets");
   const [legacyBenefits, setLegacyBenefits] = useState<LegacyBenefits>({
-    welcomeDownloads: 2,
-    invitationDownloads: 1,
+    welcomeDownloads: 3,
+    invitationDownloads: 2,
     vipCredits: 8,
     downloadCredits: 12,
     vipActive: true,
   });
   const [hasLegacyBenefits, setHasLegacyBenefits] = useState(false);
-  const [benefitChoice, setBenefitChoice] = useState<BenefitChoice>("auto");
+  const [benefitChoices, setBenefitChoices] = useState<BenefitChoice[]>([
+    ...defaultBenefitChoices,
+  ]);
   const [showHistoricalRecords, setShowHistoricalRecords] = useState(false);
   const [autoRenew, setAutoRenew] = useState(true);
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
@@ -903,7 +886,7 @@ export default function Prototype() {
         legacyBenefits,
         balance,
         hasLegacyBenefits,
-        benefitChoice,
+        benefitChoices,
       );
     setOwned((v) => Array.from(new Set([...v, ...ids])));
     setCart((v) => v.filter((id) => !ids.includes(id)));
@@ -983,7 +966,7 @@ export default function Prototype() {
       legacyBenefits,
       upgrading ? planTotal - creditUsed : planTotal,
       false,
-      "planCredits",
+      ["planCredits"],
     );
     setUser(pendingPlan);
     setCreditUsed(
@@ -1193,8 +1176,8 @@ export default function Prototype() {
           creditBalance={(user === "max" ? 150 : 30) - creditUsed}
           legacyBenefits={legacyBenefits}
           hasLegacyBenefits={hasLegacyBenefits}
-          benefitChoice={benefitChoice}
-          onBenefitChoice={setBenefitChoice}
+          benefitChoices={benefitChoices}
+          onBenefitChoices={setBenefitChoices}
           onRemove={(id) => setCart((v) => v.filter((x) => x !== id))}
           onOpen={openModel}
           onCheckout={() => {
@@ -1267,8 +1250,8 @@ export default function Prototype() {
               planBalance={(user === "max" ? 150 : 30) - creditUsed}
               legacyBenefits={legacyBenefits}
               hasLegacyBenefits={hasLegacyBenefits}
-              benefitChoice={benefitChoice}
-              onBenefitChoice={setBenefitChoice}
+              benefitChoices={benefitChoices}
+              onBenefitChoices={setBenefitChoices}
               onPay={() => completePurchase()}
               onUpgrade={() => choosePlan("max", "pdp")}
               onChoosePlan={(plan) => choosePlan(plan, "pdp")}
@@ -1285,8 +1268,8 @@ export default function Prototype() {
               planBalance={(user === "max" ? 150 : 30) - creditUsed}
               legacyBenefits={legacyBenefits}
               hasLegacyBenefits={hasLegacyBenefits}
-              benefitChoice={benefitChoice}
-              onBenefitChoice={setBenefitChoice}
+              benefitChoices={benefitChoices}
+              onBenefitChoices={setBenefitChoices}
               onPay={() =>
                 completePurchase(cartModels.map((model) => model.id))
               }
@@ -1379,10 +1362,10 @@ export default function Prototype() {
           setFavorites([]);
           setCart([]);
           setFreeClaimed(0);
-          setBenefitChoice("auto");
+          setBenefitChoices([...defaultBenefitChoices]);
           setLegacyBenefits({
-            welcomeDownloads: 2,
-            invitationDownloads: 1,
+            welcomeDownloads: 3,
+            invitationDownloads: 2,
             vipCredits: 8,
             downloadCredits: 12,
             vipActive: true,
@@ -2484,73 +2467,65 @@ function SubscriptionOffer({
 }
 
 function BenefitPicker({
-  id,
   user,
   planBalance,
   legacyBenefits,
   hasLegacyBenefits,
+  allocation,
   value,
   onChange,
 }: {
-  id: string;
   user: UserMode;
   planBalance: number;
   legacyBenefits: LegacyBenefits;
   hasLegacyBenefits: boolean;
-  value: BenefitChoice;
-  onChange: (choice: BenefitChoice) => void;
+  allocation: BenefitAllocation;
+  value: BenefitChoice[];
+  onChange: (choices: BenefitChoice[]) => void;
 }) {
-  const selected = resolveBenefitChoice(
-    value,
-    user,
-    legacyBenefits,
-    planBalance,
-    hasLegacyBenefits,
-  );
+  const toggle = (choice: BenefitChoice) =>
+    onChange(
+      value.includes(choice)
+        ? value.filter((item) => item !== choice)
+        : [...value, choice],
+    );
   return (
     <div className="benefit-picker">
       <div className="benefit-picker-head">
-        <b>Payment option</b>
-        {hasLegacyBenefits && <span>Expiring soonest first</span>}
+        <b>Use benefits</b>
+        {hasLegacyBenefits && <span>Applied by expiry date</span>}
       </div>
       {hasLegacyBenefits && legacyBenefitMeta.map((item) => {
         const balance = legacyBenefits[item.balanceKey];
+        const used = allocation[item.key];
         if (balance <= 0) return null;
         return (
-          <label key={item.key} className={selected === item.key ? "selected" : ""}>
+          <label key={item.key} className={value.includes(item.key) ? "selected" : ""}>
             <input
-              type="radio"
-              name={`${id}-benefit`}
-              checked={selected === item.key}
-              onChange={() => onChange(item.key)}
+              type="checkbox"
+              checked={value.includes(item.key)}
+              onChange={() => toggle(item.key)}
             />
             <span><b>{item.label}</b><small>Expires {item.expires}</small></span>
-            <strong>{balance} left</strong>
+            <strong>{used ? `${used} used · ` : ""}{balance} left</strong>
           </label>
         );
       })}
       {(user === "pro" || user === "max") && planBalance > 0 && (
-        <label className={selected === "planCredits" ? "selected" : ""}>
+        <label className={value.includes("planCredits") ? "selected" : ""}>
           <input
-            type="radio"
-            name={`${id}-benefit`}
-            checked={selected === "planCredits"}
-            onChange={() => onChange("planCredits")}
+            type="checkbox"
+            checked={value.includes("planCredits")}
+            onChange={() => toggle("planCredits")}
           />
           <span><b>{user === "max" ? "Max" : "Pro"} credits</b><small>Cycle ends Oct 07, 2026</small></span>
-          <strong>{planBalance} left</strong>
+          <strong>{allocation.planCredits ? `${allocation.planCredits} used · ` : ""}{planBalance} left</strong>
         </label>
       )}
-      <label className={selected === "cash" ? "selected" : ""}>
-        <input
-          type="radio"
-          name={`${id}-benefit`}
-          checked={selected === "cash"}
-          onChange={() => onChange("cash")}
-        />
-        <span><b>Cash payment</b><small>Permanent access</small></span>
-        <strong>$1.99 / model</strong>
-      </label>
+      <div className="benefit-cash-row">
+        <span><b>Cash fallback</b><small>For models not covered above</small></span>
+        <strong>{allocation.cashModels ? `${allocation.cashModels} × $1.99` : "$1.99 / model"}</strong>
+      </div>
     </div>
   );
 }
@@ -2561,8 +2536,8 @@ function CartPage({
   creditBalance,
   legacyBenefits,
   hasLegacyBenefits,
-  benefitChoice,
-  onBenefitChoice,
+  benefitChoices,
+  onBenefitChoices,
   onRemove,
   onOpen,
   onCheckout,
@@ -2574,8 +2549,8 @@ function CartPage({
   creditBalance: number;
   legacyBenefits: LegacyBenefits;
   hasLegacyBenefits: boolean;
-  benefitChoice: BenefitChoice;
-  onBenefitChoice: (choice: BenefitChoice) => void;
+  benefitChoices: BenefitChoice[];
+  onBenefitChoices: (choices: BenefitChoice[]) => void;
   onRemove: (id: number) => void;
   onOpen: (m: Model) => void;
   onCheckout: () => void;
@@ -2589,7 +2564,7 @@ function CartPage({
       legacyBenefits,
       creditBalance,
       hasLegacyBenefits,
-      benefitChoice,
+      benefitChoices,
     ),
     legacyUsed =
       allocation.welcome +
@@ -2639,13 +2614,13 @@ function CartPage({
             </div>
             {(hasLegacyBenefits || user === "pro" || user === "max") && (
               <BenefitPicker
-                id="cart"
                 user={user}
                 planBalance={creditBalance}
                 legacyBenefits={legacyBenefits}
                 hasLegacyBenefits={hasLegacyBenefits}
-                value={benefitChoice}
-                onChange={onBenefitChoice}
+                allocation={allocation}
+                value={benefitChoices}
+                onChange={onBenefitChoices}
               />
             )}
             {user === "pro" && allocation.cashModels > 0 && (
@@ -3647,8 +3622,8 @@ function Checkout({
   planBalance,
   legacyBenefits,
   hasLegacyBenefits,
-  benefitChoice,
-  onBenefitChoice,
+  benefitChoices,
+  onBenefitChoices,
   onPay,
   onUpgrade,
   onChoosePlan,
@@ -3659,8 +3634,8 @@ function Checkout({
   planBalance: number;
   legacyBenefits: LegacyBenefits;
   hasLegacyBenefits: boolean;
-  benefitChoice: BenefitChoice;
-  onBenefitChoice: (choice: BenefitChoice) => void;
+  benefitChoices: BenefitChoice[];
+  onBenefitChoices: (choices: BenefitChoice[]) => void;
   onPay: () => void;
   onUpgrade: () => void;
   onChoosePlan: (plan: "pro" | "max") => void;
@@ -3673,19 +3648,12 @@ function Checkout({
       legacyBenefits,
       planBalance,
       hasLegacyBenefits,
-      benefitChoice,
+      benefitChoices,
     ),
     sources = allocationSources(allocation),
     cashUnitPrice = allocation.cashModels
       ? allocation.cashAmount / allocation.cashModels
-      : 1.99,
-    selectedSource = resolveBenefitChoice(
-      benefitChoice,
-      user,
-      legacyBenefits,
-      planBalance,
-      hasLegacyBenefits,
-    );
+      : 1.99;
   return (
     <div className="checkout-modal">
       <p className="kicker">ORDER REVIEW</p>
@@ -3704,13 +3672,13 @@ function Checkout({
       ))}
       {(hasLegacyBenefits || user === "pro" || user === "max") && (
         <BenefitPicker
-          id="checkout"
           user={user}
           planBalance={planBalance}
           legacyBenefits={legacyBenefits}
           hasLegacyBenefits={hasLegacyBenefits}
-          value={selectedSource}
-          onChange={onBenefitChoice}
+          allocation={allocation}
+          value={benefitChoices}
+          onChange={onBenefitChoices}
         />
       )}
       {allocation.cashModels > 0 && allocation.vipDiscount > 0 ? (
