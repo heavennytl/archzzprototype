@@ -645,6 +645,7 @@ export default function Prototype() {
   const [showHistoricalRecords, setShowHistoricalRecords] = useState(false);
   const [autoRenew, setAutoRenew] = useState(true);
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
+  const [resumingBillingId, setResumingBillingId] = useState<string | null>(null);
   const [pendingAccountTab, setPendingAccountTab] =
     useState<AccountTab>("My Assets");
   const [pendingPlan, setPendingPlan] = useState<"pro" | "max" | null>(null),
@@ -854,26 +855,31 @@ export default function Prototype() {
       v.includes(id) ? v.filter((x) => x !== id) : [...v, id],
     );
   }
-  function addToCart(id: number) {
+  function addToCart(id: number): boolean {
     const model = catalog.find((item) => item.id === id);
-    if (!model?.checked || model.free || owned.includes(id))
-      return setToast(
+    if (!model?.checked || model.free || owned.includes(id)) {
+      setToast(
         model && !model.checked
           ? "This item is unavailable"
           : "This model is already available to you",
       );
+      return false;
+    }
     if (user === "guest") {
       setSelected(model);
       setAuthIntent("cart");
-      return setModal("auth");
+      setModal("auth");
+      return false;
     }
     if (!cart.includes(id) && cart.length >= 30) {
       setToast("Cart limit reached · Maximum 30 models per order");
-      return setTimeout(() => setToast(""), 2200);
+      setTimeout(() => setToast(""), 2200);
+      return false;
     }
     setCart((v) => (v.includes(id) ? v : [...v, id]));
     setToast("Added to cart");
     setTimeout(() => setToast(""), 1800);
+    return true;
   }
   function primaryAction(model: Model) {
     setSelected(model);
@@ -1033,8 +1039,8 @@ export default function Prototype() {
       (used) => (upgrading ? used : 0) + resumeAllocation.planCredits,
     );
     setAutoRenew(true);
-    setBillingRecords((records) => [
-      {
+    setBillingRecords((records) => {
+      const paidBillingRecord: BillingRecord = {
         id: `BILL-${Date.now()}`,
         title: upgrading
           ? "Pro to Max upgrade"
@@ -1047,9 +1053,16 @@ export default function Prototype() {
             : "$14.99",
         status: "Paid",
         kind: "Subscription",
-      },
-      ...records,
-    ]);
+      };
+      return resumingBillingId
+        ? records.map((record) =>
+            record.id === resumingBillingId
+              ? { ...paidBillingRecord, id: record.id }
+              : record,
+          )
+        : [paidBillingRecord, ...records];
+    });
+    setResumingBillingId(null);
     const activatedPlan = pendingPlan === "max" ? "Max" : "Pro";
     if (resumeIds.length) {
       setLegacyBenefits((current) => ({
@@ -1177,6 +1190,7 @@ export default function Prototype() {
           onOpen={openModel}
           favorites={favorites}
           owned={owned}
+          cart={cart}
           onFavorite={toggleFavorite}
           onCart={addToCart}
           onImageSearch={() => setModal("imageSearch")}
@@ -1193,6 +1207,7 @@ export default function Prototype() {
           onOpen={openModel}
           favorites={favorites}
           owned={owned}
+          cart={cart}
           onFavorite={toggleFavorite}
           onCart={addToCart}
           onImageSearch={() => setModal("imageSearch")}
@@ -1203,6 +1218,7 @@ export default function Prototype() {
           model={selected}
           owned={owned.includes(selected.id)}
           allOwned={owned}
+          cart={cart}
           favorites={favorites}
           user={user}
           creditBalance={(user === "max" ? 150 : 30) - creditUsed}
@@ -1282,9 +1298,13 @@ export default function Prototype() {
             setModal("checkout");
           }}
           onBillingAction={(record) => {
-            setPendingPlan(
-              record.title.toLowerCase().includes("max") ? "max" : "pro",
-            );
+            const plan = record.title.toLowerCase().includes("max") ? "max" : "pro";
+            if (user === "max" || (user === "pro" && plan === "pro")) {
+              setToast("This pending subscription is no longer payable.");
+              return;
+            }
+            setPendingPlan(plan);
+            setResumingBillingId(record.id);
             setSubscriptionResume("none");
             setModal("subscriptionCheckout");
           }}
@@ -1313,6 +1333,7 @@ export default function Prototype() {
         <Modal onClose={() => {
           setModal("none");
           setResumingOrderId(null);
+          setResumingBillingId(null);
         }}>
           {modal === "auth" && <Auth onContinue={authenticate} />}{" "}
           {modal === "checkout" && (
@@ -1453,6 +1474,7 @@ export default function Prototype() {
           setOrders((items) => items.filter((order) => order.seeded));
           setBillingRecords((items) => items.filter((record) => record.seeded));
           setResumingOrderId(null);
+          setResumingBillingId(null);
           setFavorites([]);
           setCart([]);
           setFreeClaimed(0);
@@ -1714,6 +1736,7 @@ function Home({
   onOpen,
   favorites,
   owned,
+  cart,
   onFavorite,
   onCart,
   onImageSearch,
@@ -1727,8 +1750,9 @@ function Home({
   onOpen: (m: Model) => void;
   favorites: number[];
   owned: number[];
+  cart: number[];
   onFavorite: (id: number) => void;
-  onCart: (id: number) => void;
+  onCart: (id: number) => boolean;
   onImageSearch: () => void;
 }) {
   return (
@@ -1824,6 +1848,7 @@ function Home({
         onOpen={onOpen}
         favorites={favorites}
         owned={owned}
+        cart={cart}
         onFavorite={onFavorite}
         onCart={onCart}
         onAll={() => onSearchFor("Popular")}
@@ -1887,6 +1912,7 @@ function SearchResults({
   onOpen,
   favorites,
   owned,
+  cart,
   onFavorite,
   onCart,
   onImageSearch,
@@ -1899,8 +1925,9 @@ function SearchResults({
   onOpen: (m: Model) => void;
   favorites: number[];
   owned: number[];
+  cart: number[];
   onFavorite: (id: number) => void;
-  onCart: (id: number) => void;
+  onCart: (id: number) => boolean;
   onImageSearch: () => void;
 }) {
   const [category, setCategory] = useState("All categories"),
@@ -2053,6 +2080,7 @@ function SearchResults({
                   onOpen={onOpen}
                   favorite={favorites.includes(model.id)}
                   owned={owned.includes(model.id)}
+                  inCart={cart.includes(model.id)}
                   onFavorite={onFavorite}
                   onCart={onCart}
                 />
@@ -2086,6 +2114,7 @@ function ProductDetail({
   model,
   owned,
   allOwned,
+  cart,
   favorites,
   user,
   creditBalance,
@@ -2104,6 +2133,7 @@ function ProductDetail({
   model: Model;
   owned: boolean;
   allOwned: number[];
+  cart: number[];
   favorites: number[];
   user: UserMode;
   creditBalance: number;
@@ -2114,7 +2144,7 @@ function ProductDetail({
   onFavoriteModel: (id: number) => void;
   onPrimary: () => void;
   onCart: () => void;
-  onCartModel: (id: number) => void;
+  onCartModel: (id: number) => boolean;
   onOpen: (m: Model) => void;
   onPricing: () => void;
   onLicense: () => void;
@@ -2358,6 +2388,7 @@ function ProductDetail({
         onOpen={onOpen}
         favorites={favorites}
         owned={allOwned}
+        cart={cart}
         onFavorite={onFavoriteModel}
         onCart={onCartModel}
       />
@@ -2861,6 +2892,7 @@ function Assets({
                   : billingRecords.filter((record) => record.kind === "Subscription")
               }
               models={catalog}
+              user={user}
               onOpen={onOpen}
               onAction={onOrderAction}
               onBillingAction={onBillingAction}
@@ -3034,6 +3066,7 @@ function OrderHistory({
   orders,
   billingRecords,
   models,
+  user,
   onOpen,
   onAction,
   onBillingAction,
@@ -3041,6 +3074,7 @@ function OrderHistory({
   orders: OrderRecord[];
   billingRecords: BillingRecord[];
   models: Model[];
+  user: UserMode;
   onOpen: (model: Model) => void;
   onAction: (order: OrderRecord) => void;
   onBillingAction: (record: BillingRecord) => void;
@@ -3126,8 +3160,15 @@ function OrderHistory({
         );
       })}
       {view === "billing" &&
-        billingRecords.map((record) => (
-          <article className="billing-record" key={record.id}>
+        billingRecords.map((record) => {
+          const pendingPlan = record.title.toLowerCase().includes("max")
+            ? "max"
+            : "pro";
+          const canContinueSubscription =
+            record.status === "Pending" &&
+            record.kind === "Subscription" &&
+            (user === "basic" || (user === "pro" && pendingPlan === "max"));
+          return <article className="billing-record" key={record.id}>
             <div className="billing-name">
               <small>{record.kind}</small>
               <b>{record.title}</b>
@@ -3149,7 +3190,7 @@ function OrderHistory({
             >
               {record.status}
             </strong>
-            {record.status === "Pending" && record.kind === "Subscription" && (
+            {canContinueSubscription && (
               <button
                 className="order-action"
                 onClick={() => onBillingAction(record)}
@@ -3157,8 +3198,8 @@ function OrderHistory({
                 Continue payment
               </button>
             )}
-          </article>
-        ))}
+          </article>;
+        })}
     </div>
   );
 }
@@ -3228,6 +3269,7 @@ function ModelSection({
   onOpen,
   favorites,
   owned,
+  cart,
   onFavorite,
   onCart,
   onAll,
@@ -3239,8 +3281,9 @@ function ModelSection({
   onOpen: (m: Model) => void;
   favorites: number[];
   owned: number[];
+  cart: number[];
   onFavorite: (id: number) => void;
-  onCart: (id: number) => void;
+  onCart: (id: number) => boolean;
   onAll?: () => void;
 }) {
   const paginated = title === "Related models",
@@ -3272,6 +3315,7 @@ function ModelSection({
             onOpen={onOpen}
             favorite={favorites.includes(model.id)}
             owned={owned.includes(model.id)}
+            inCart={cart.includes(model.id)}
             onFavorite={onFavorite}
             onCart={onCart}
           />
@@ -3319,6 +3363,7 @@ function ModelCard({
   onOpen,
   favorite,
   owned,
+  inCart,
   onFavorite,
   onCart,
 }: {
@@ -3326,10 +3371,10 @@ function ModelCard({
   onOpen: (m: Model) => void;
   favorite: boolean;
   owned: boolean;
+  inCart: boolean;
   onFavorite: (id: number) => void;
-  onCart: (id: number) => void;
+  onCart: (id: number) => boolean;
 }) {
-  const [addedToCart, setAddedToCart] = useState(false);
   const unavailable = !model.checked,
     purchasable = !owned && !model.free && !unavailable,
     freeAction = !owned && model.free && !unavailable,
@@ -3393,7 +3438,7 @@ function ModelCard({
               className={
                 owned
                   ? "owned-card-action download-icon-action"
-                  : addedToCart
+                  : inCart
                     ? "purchase-card-action cart-icon-action added"
                   : purchasable
                     ? "purchase-card-action cart-icon-action"
@@ -3403,11 +3448,10 @@ function ModelCard({
               }
               onClick={() => {
                 if (purchasable) {
-                  if (!addedToCart) onCart(model.id);
-                  setAddedToCart(true);
+                  if (!inCart) onCart(model.id);
                 } else onOpen(model);
               }}
-              disabled={addedToCart}
+              disabled={inCart}
               aria-label={
                 owned
                   ? "Download again"
@@ -3415,14 +3459,14 @@ function ModelCard({
                     ? "View unavailable item"
                     : model.free
                       ? "View free model"
-                  : addedToCart
+                  : inCart
                     ? "Added to cart"
                     : "Add to cart"
               }
             >
               {owned || freeAction ? (
                 <img src="/download-card.svg" alt="" aria-hidden="true" />
-              ) : addedToCart ? (
+              ) : inCart ? (
                 <span className="added-check" aria-hidden="true" />
               ) : purchasable ? (
                 <img src="/cart-card.svg" alt="" aria-hidden="true" />
@@ -3439,7 +3483,7 @@ function ModelCard({
                 />
               )}
               {owned && <span>Again</span>}
-              {purchasable && <span>{addedToCart ? "Added" : "Add"}</span>}
+              {purchasable && <span>{inCart ? "Added" : "Add"}</span>}
               {freeAction && <span>Free</span>}
             </button>
           </div>
@@ -3902,8 +3946,9 @@ function Checkout({
           : "Confirm access"}
       </button>
       <p className="legal-note">
-        By continuing, you agree to the Terms, Refund Policy and Standard License.
-        Final amount is shown by your payment provider.
+        {allocation.cashAmount > 0
+          ? "By continuing, you agree to the Terms, Refund Policy and Standard License. Final amount is shown by your payment provider."
+          : "By confirming, you agree to the Terms and Standard License."}
       </p>
     </div>
   );
