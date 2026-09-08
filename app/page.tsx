@@ -612,6 +612,8 @@ export default function Prototype() {
       | "cartCheckout"
       | "subscriptionCheckout"
       | "subscriptionSuccess"
+      | "imageSearch"
+      | "cancelRenewal"
       | "license"
       | "success"
     >("none");
@@ -736,6 +738,60 @@ export default function Prototype() {
         kind: "Legacy credits",
         seeded: true,
       },
+      {
+        id: "BILL-SUB-PENDING-0828",
+        title: "Pro monthly subscription",
+        date: "Aug 28, 2026",
+        amount: "$14.99",
+        status: "Pending",
+        kind: "Subscription",
+        seeded: true,
+      },
+      {
+        id: "BILL-SUB-PROCESSING-0829",
+        title: "Max monthly subscription",
+        date: "Aug 29, 2026",
+        amount: "$49.99",
+        status: "Processing",
+        kind: "Subscription",
+        seeded: true,
+      },
+      {
+        id: "BILL-SUB-FAILED-0830",
+        title: "Pro monthly subscription",
+        date: "Aug 30, 2026",
+        amount: "$14.99",
+        status: "Failed",
+        kind: "Subscription",
+        seeded: true,
+      },
+      {
+        id: "BILL-SUB-EXPIRED-0831",
+        title: "Max monthly subscription",
+        date: "Aug 31, 2026",
+        amount: "$49.99",
+        status: "Expired",
+        kind: "Subscription",
+        seeded: true,
+      },
+      {
+        id: "BILL-LEGACY-REFUNDING-0901",
+        title: "Legacy Download Credits",
+        date: "Sep 01, 2026",
+        amount: "$10.00",
+        status: "Refund processing",
+        kind: "Legacy credits",
+        seeded: true,
+      },
+      {
+        id: "BILL-LEGACY-REFUNDED-0902",
+        title: "Legacy VIP monthly",
+        date: "Sep 02, 2026",
+        amount: "$5.00",
+        status: "Refunded",
+        kind: "Legacy VIP",
+        seeded: true,
+      },
     ]),
     [creditUsed, setCreditUsed] = useState(0),
     [infoKey, setInfoKey] = useState<InfoKey>("about");
@@ -810,6 +866,10 @@ export default function Prototype() {
       setSelected(model);
       setAuthIntent("cart");
       return setModal("auth");
+    }
+    if (!cart.includes(id) && cart.length >= 30) {
+      setToast("Cart limit reached · Maximum 30 models per order");
+      return setTimeout(() => setToast(""), 2200);
     }
     setCart((v) => (v.includes(id) ? v : [...v, id]));
     setToast("Added to cart");
@@ -965,8 +1025,8 @@ export default function Prototype() {
       pendingPlan,
       legacyBenefits,
       upgrading ? planTotal - creditUsed : planTotal,
-      false,
-      ["planCredits"],
+      hasLegacyBenefits,
+      benefitChoices,
     );
     setUser(pendingPlan);
     setCreditUsed(
@@ -1006,9 +1066,12 @@ export default function Prototype() {
       setCart((items) => items.filter((id) => !resumeIds.includes(id)));
       addOrders(
         resumeIds,
-        allocationSources(resumeAllocation).map((source) =>
-          entitlementLabel(source, pendingPlan),
-        ),
+        allocationSources(resumeAllocation).map((source) => {
+          const cashUnitPrice = resumeAllocation.cashModels
+            ? resumeAllocation.cashAmount / resumeAllocation.cashModels
+            : 1.99;
+          return entitlementLabel(source, pendingPlan, cashUnitPrice);
+        }),
       );
       setSuccessCount(resumeIds.length);
       setSuccessNotice({
@@ -1116,6 +1179,7 @@ export default function Prototype() {
           owned={owned}
           onFavorite={toggleFavorite}
           onCart={addToCart}
+          onImageSearch={() => setModal("imageSearch")}
         />
       )}
       {page === "home" && <ExtraCategories onSearchFor={searchFor} />}
@@ -1131,6 +1195,7 @@ export default function Prototype() {
           owned={owned}
           onFavorite={toggleFavorite}
           onCart={addToCart}
+          onImageSearch={() => setModal("imageSearch")}
         />
       )}
       {page === "product" && (
@@ -1141,9 +1206,9 @@ export default function Prototype() {
           favorites={favorites}
           user={user}
           creditBalance={(user === "max" ? 150 : 30) - creditUsed}
-          legacyBenefits={legacyBenefits}
           hasLegacyBenefits={hasLegacyBenefits}
           favorite={favorites.includes(selected.id)}
+          inCart={cart.includes(selected.id)}
           onFavorite={() => toggleFavorite(selected.id)}
           onFavoriteModel={toggleFavorite}
           onPrimary={() => primaryAction(selected)}
@@ -1216,13 +1281,20 @@ export default function Prototype() {
             setResumingOrderId(order.id);
             setModal("checkout");
           }}
-          onToggleRenew={() => {
-            setAutoRenew((current) => !current);
-            setToast(
-              autoRenew
-                ? "Auto-renewal cancelled. Access remains active through Oct 07, 2026."
-                : "Auto-renewal restored.",
+          onBillingAction={(record) => {
+            setPendingPlan(
+              record.title.toLowerCase().includes("max") ? "max" : "pro",
             );
+            setSubscriptionResume("none");
+            setModal("subscriptionCheckout");
+          }}
+          onToggleRenew={() => {
+            if (autoRenew) {
+              setModal("cancelRenewal");
+            } else {
+              setAutoRenew(true);
+              setToast("Auto-renewal restored.");
+            }
           }}
           onAccountNotice={(message) => {
             setToast(message);
@@ -1293,6 +1365,10 @@ export default function Prototype() {
                     ? cartModels.length
                     : 0
               }
+              legacyBenefits={legacyBenefits}
+              hasLegacyBenefits={hasLegacyBenefits}
+              benefitChoices={benefitChoices}
+              onBenefitChoices={setBenefitChoices}
               onBack={subscriptionResume !== "none" ? () => {
                 setModal(subscriptionResume === "cart" ? "none" : "checkout");
                 setPendingPlan(null);
@@ -1300,6 +1376,24 @@ export default function Prototype() {
               } : undefined}
               backLabel={subscriptionResume === "cart" ? "Back to cart" : "Back to one-time purchase"}
               onPay={completeSubscription}
+            />
+          )}{" "}
+          {modal === "imageSearch" && (
+            <ImageSearch
+              onSearch={() => {
+                setModal("none");
+                searchFor("Image search");
+              }}
+            />
+          )}{" "}
+          {modal === "cancelRenewal" && (
+            <CancelRenewal
+              onKeep={() => setModal("none")}
+              onConfirm={() => {
+                setAutoRenew(false);
+                setModal("none");
+                setToast("Auto-renewal cancelled. Access remains active through Oct 07, 2026.");
+              }}
             />
           )}{" "}
           {modal === "subscriptionSuccess" && pendingPlan && (
@@ -1447,7 +1541,10 @@ function ExtraCategories({
 }) {
   const [target, setTarget] = useState<Element | null>(null);
   useEffect(() => {
-    setTarget(document.querySelector(".category-rail"));
+    const frame = requestAnimationFrame(() =>
+      setTarget(document.querySelector(".category-rail")),
+    );
+    return () => cancelAnimationFrame(frame);
   }, []);
   if (!target) return null;
   const items = [
@@ -1619,6 +1716,7 @@ function Home({
   owned,
   onFavorite,
   onCart,
+  onImageSearch,
 }: {
   query: string;
   searchHistory: string[];
@@ -1631,6 +1729,7 @@ function Home({
   owned: number[];
   onFavorite: (id: number) => void;
   onCart: (id: number) => void;
+  onImageSearch: () => void;
 }) {
   return (
     <main>
@@ -1671,9 +1770,9 @@ function Home({
           <button
             type="button"
             className="image-search"
-            disabled
-            title="Image search is not available"
-            aria-label="Image search unavailable"
+            title="Search by image"
+            aria-label="Search by image"
+            onClick={onImageSearch}
           >
             <Icon name="image" />
           </button>
@@ -1790,6 +1889,7 @@ function SearchResults({
   owned,
   onFavorite,
   onCart,
+  onImageSearch,
 }: {
   query: string;
   onQuery: (v: string) => void;
@@ -1801,6 +1901,7 @@ function SearchResults({
   owned: number[];
   onFavorite: (id: number) => void;
   onCart: (id: number) => void;
+  onImageSearch: () => void;
 }) {
   const [category, setCategory] = useState("All categories"),
     [keyword, setKeyword] = useState("All keywords"),
@@ -1866,7 +1967,10 @@ function SearchResults({
       ),
     visibleModels = filtered.slice(0, visibleCount);
   useEffect(
-    () => setVisibleCount(40),
+    () => {
+      const frame = requestAnimationFrame(() => setVisibleCount(40));
+      return () => cancelAnimationFrame(frame);
+    },
     [query, type, category, keyword, renderer],
   );
   const resetFilters = () => {
@@ -1900,9 +2004,9 @@ function SearchResults({
           <button
             type="button"
             className="workbench-image-search"
-            disabled
-            title="Image search is not available"
-            aria-label="Image search unavailable"
+            title="Search by image"
+            aria-label="Search by image"
+            onClick={onImageSearch}
           >
             <Icon name="image" size={19} />
           </button>
@@ -1928,7 +2032,6 @@ function SearchResults({
             value={renderer}
             onChange={setRenderer}
             options={["All renderers", "Corona", "V-Ray"]}
-            disabled={type === "SketchUp"}
           />
         </div>
       </div>
@@ -1986,9 +2089,9 @@ function ProductDetail({
   favorites,
   user,
   creditBalance,
-  legacyBenefits,
   hasLegacyBenefits,
   favorite,
+  inCart,
   onFavorite,
   onFavoriteModel,
   onPrimary,
@@ -2004,9 +2107,9 @@ function ProductDetail({
   favorites: number[];
   user: UserMode;
   creditBalance: number;
-  legacyBenefits: LegacyBenefits;
   hasLegacyBenefits: boolean;
   favorite: boolean;
+  inCart: boolean;
   onFavorite: () => void;
   onFavoriteModel: (id: number) => void;
   onPrimary: () => void;
@@ -2017,7 +2120,6 @@ function ProductDetail({
   onLicense: () => void;
 }) {
   const [activeImage, setActiveImage] = useState(0);
-  const [pdpAddedToCart, setPdpAddedToCart] = useState(false);
   const subscribed = user === "pro" || user === "max",
     available = model.checked;
   const sameCategory = catalog.filter(
@@ -2068,13 +2170,10 @@ function ProductDetail({
       ),
     showNext = () =>
       setActiveImage((index) => (index + 1) % galleryImages.length);
-  useEffect(() => setActiveImage(0), [model.id]);
-  useEffect(() => setPdpAddedToCart(false), [model.id]);
-  const handlePdpCart = () => {
-    if (pdpAddedToCart) return;
-    onCart();
-    setPdpAddedToCart(true);
-  };
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setActiveImage(0));
+    return () => cancelAnimationFrame(frame);
+  }, [model.id]);
   return (
     <main className="pdp-page">
       <div className="breadcrumbs">
@@ -2097,7 +2196,7 @@ function ProductDetail({
           <div className="main-image">
             <img
               src={galleryImages[activeImage]}
-              alt={`${model.title} · image ${activeImage + 1}`}
+              alt={`${model.title} · view ${activeImage + 1}`}
             />
             {galleryImages.length > 1 && (
               <>
@@ -2235,13 +2334,13 @@ function ProductDetail({
             </button>
             {available && !model.free && !owned && (
               <button
-                className={`cart-cta pdp-cart-icon-cta ${pdpAddedToCart ? "added" : ""}`}
-                onClick={handlePdpCart}
-                disabled={pdpAddedToCart}
-                aria-label={pdpAddedToCart ? "Added to cart" : "Add to cart"}
-                title={pdpAddedToCart ? "Added to cart" : "Add to cart"}
+                className={`cart-cta pdp-cart-icon-cta ${inCart ? "added" : ""}`}
+                onClick={onCart}
+                disabled={inCart}
+                aria-label={inCart ? "Added to cart" : "Add to cart"}
+                title={inCart ? "Added to cart" : "Add to cart"}
               >
-                {pdpAddedToCart ? (
+                {inCart ? (
                   <span className="added-check" aria-hidden="true" />
                 ) : (
                   <img src="/cart-card.svg" alt="" aria-hidden="true" />
@@ -2507,7 +2606,7 @@ function BenefitPicker({
               onChange={() => toggle(item.key)}
             />
             <span><b>{item.label}</b><small>Expires {item.expires}</small></span>
-            <strong>{used ? `${used} used · ` : ""}{balance} left</strong>
+            <strong>{used ? `${used} used · ` : ""}{Math.max(0, balance - used)} left</strong>
           </label>
         );
       })}
@@ -2519,7 +2618,7 @@ function BenefitPicker({
             onChange={() => toggle("planCredits")}
           />
           <span><b>{user === "max" ? "Max" : "Pro"} credits</b><small>Cycle ends Oct 07, 2026</small></span>
-          <strong>{allocation.planCredits ? `${allocation.planCredits} used · ` : ""}{planBalance} left</strong>
+          <strong>{allocation.planCredits ? `${allocation.planCredits} used · ` : ""}{Math.max(0, planBalance - allocation.planCredits)} left</strong>
         </label>
       )}
       <div className="benefit-cash-row">
@@ -2639,6 +2738,12 @@ function CartPage({
                 onLearnMore={onPricing}
               />
             )}
+            {allocation.cashModels > 0 && allocation.vipDiscount > 0 && (
+              <div className="cart-discount-line">
+                <span>Legacy VIP discount</span>
+                <b>−${allocation.vipDiscount.toFixed(2)}</b>
+              </div>
+            )}
             {!legacyUsed && !allocation.planCredits && user !== "pro" && (
               <div className="recommend-box">
                 <span>BUY ONCE</span>
@@ -2679,6 +2784,7 @@ function Assets({
   onToggleRenew,
   onDemoDownload,
   onOrderAction,
+  onBillingAction,
   onAccountNotice,
 }: {
   tab: AccountTab;
@@ -2699,6 +2805,7 @@ function Assets({
   onToggleRenew: () => void;
   onDemoDownload: () => void;
   onOrderAction: (order: OrderRecord) => void;
+  onBillingAction: (record: BillingRecord) => void;
   onAccountNotice: (message: string) => void;
 }) {
   const items = tab === "Favorites" ? favorites : owned;
@@ -2756,6 +2863,7 @@ function Assets({
               models={catalog}
               onOpen={onOpen}
               onAction={onOrderAction}
+              onBillingAction={onBillingAction}
             />
           ) : (
             <AccountEmptyState
@@ -2928,12 +3036,14 @@ function OrderHistory({
   models,
   onOpen,
   onAction,
+  onBillingAction,
 }: {
   orders: OrderRecord[];
   billingRecords: BillingRecord[];
   models: Model[];
   onOpen: (model: Model) => void;
   onAction: (order: OrderRecord) => void;
+  onBillingAction: (record: BillingRecord) => void;
 }) {
   const [view, setView] = useState<"models" | "billing">("models");
   return (
@@ -3010,9 +3120,6 @@ function OrderHistory({
               {order.status === "Pending" && (
                 <button className="order-action" onClick={() => onAction(order)}>Continue payment</button>
               )}
-              {order.status === "Failed" && (
-                <button className="order-action" onClick={() => onAction(order)}>Retry payment</button>
-              )}
               {order.status === "Processing" && <small className="order-wait">Checking payment status…</small>}
             </div>
           </article>
@@ -3042,6 +3149,14 @@ function OrderHistory({
             >
               {record.status}
             </strong>
+            {record.status === "Pending" && record.kind === "Subscription" && (
+              <button
+                className="order-action"
+                onClick={() => onBillingAction(record)}
+              >
+                Continue payment
+              </button>
+            )}
           </article>
         ))}
     </div>
@@ -3131,9 +3246,15 @@ function ModelSection({
   const paginated = title === "Related models",
     [visibleCount, setVisibleCount] = useState(paginated ? 20 : items.length),
     visibleItems = paginated ? items.slice(0, visibleCount) : items;
+  const firstItemId = items[0]?.id;
   useEffect(
-    () => setVisibleCount(paginated ? 20 : items.length),
-    [paginated, items.length, items[0]?.id],
+    () => {
+      const frame = requestAnimationFrame(() =>
+        setVisibleCount(paginated ? 20 : items.length),
+      );
+      return () => cancelAnimationFrame(frame);
+    },
+    [paginated, items.length, firstItemId],
   );
   return (
     <section className="model-section">
@@ -3212,7 +3333,6 @@ function ModelCard({
   const unavailable = !model.checked,
     purchasable = !owned && !model.free && !unavailable,
     freeAction = !owned && model.free && !unavailable,
-    primaryAction = purchasable || freeAction,
     saves = 180 + model.id * 39 + (favorite ? 1 : 0);
   return (
     <article className={unavailable ? "model-card unavailable" : "model-card"}>
@@ -3596,6 +3716,47 @@ function Auth({ onContinue }: { onContinue: () => void }) {
   );
 }
 
+function ImageSearch({ onSearch }: { onSearch: () => void }) {
+  const [fileName, setFileName] = useState("");
+  return (
+    <div className="image-search-modal">
+      <p className="kicker">IMAGE SEARCH</p>
+      <h2>Search by image</h2>
+      <label className="image-upload-box">
+        <Icon name="image" size={28} />
+        <b>{fileName || "Choose an image"}</b>
+        <span>JPG, PNG or WebP</span>
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(event) => setFileName(event.target.files?.[0]?.name || "")}
+        />
+      </label>
+      <button className="primary-cta" disabled={!fileName} onClick={onSearch}>
+        Find similar models
+      </button>
+    </div>
+  );
+}
+
+function CancelRenewal({
+  onKeep,
+  onConfirm,
+}: {
+  onKeep: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="confirm-modal">
+      <p className="kicker">PLAN RENEWAL</p>
+      <h2>Cancel auto-renewal?</h2>
+      <p>Your plan and remaining credits stay active through Oct 07, 2026.</p>
+      <button className="primary-cta" onClick={onKeep}>Keep auto-renewal</button>
+      <button className="text-button danger-text" onClick={onConfirm}>Cancel renewal</button>
+    </div>
+  );
+}
+
 function LicenseSummary({ onFullTerms }: { onFullTerms: () => void }) {
   return (
     <div className="license-modal">
@@ -3753,6 +3914,10 @@ function SubscriptionCheckout({
   upgrading,
   usedCredits,
   unlockCount,
+  legacyBenefits,
+  hasLegacyBenefits,
+  benefitChoices,
+  onBenefitChoices,
   onBack,
   backLabel = "Back to one-time purchase",
   onPay,
@@ -3761,6 +3926,10 @@ function SubscriptionCheckout({
   upgrading: boolean;
   usedCredits: number;
   unlockCount: number;
+  legacyBenefits: LegacyBenefits;
+  hasLegacyBenefits: boolean;
+  benefitChoices: BenefitChoice[];
+  onBenefitChoices: (choices: BenefitChoice[]) => void;
   onBack?: () => void;
   backLabel?: string;
   onPay: () => void;
@@ -3770,6 +3939,16 @@ function SubscriptionCheckout({
   const price = upgrading ? 35 : plan === "max" ? 49.99 : 14.99;
   const renewalPrice = plan === "max" ? 49.99 : 14.99;
   const credits = plan === "max" ? 150 : 30;
+  const planBalance = upgrading ? Math.max(0, credits - usedCredits) : credits;
+  const orderAllocation = allocateBenefits(
+    unlockCount,
+    plan,
+    legacyBenefits,
+    planBalance,
+    hasLegacyBenefits,
+    benefitChoices,
+  );
+  const dueToday = price + orderAllocation.cashAmount;
   return (
     <div className="checkout-modal subscription-checkout">
       {onBack && (
@@ -3788,15 +3967,32 @@ function SubscriptionCheckout({
         </b>
         <small>
           {unlockCount > 0
-            ? `${unlockCount} credit${unlockCount > 1 ? "s" : ""} used for this order after payment.`
+            ? `${unlockCount} model${unlockCount > 1 ? "s" : ""} unlocked after payment.`
             : upgrading
             ? "Used Pro credits carry over."
             : "Unlocked models stay in My Assets."}
         </small>
       </div>
+      {unlockCount > 0 && (
+        <BenefitPicker
+          user={plan}
+          planBalance={planBalance}
+          legacyBenefits={legacyBenefits}
+          hasLegacyBenefits={hasLegacyBenefits}
+          allocation={orderAllocation}
+          value={benefitChoices}
+          onChange={onBenefitChoices}
+        />
+      )}
+      {orderAllocation.cashAmount > 0 && (
+        <div className="checkout-lines">
+          <span><b>{planName} plan</b><strong>${price.toFixed(2)}</strong></span>
+          <span><b>Models not covered by credits</b><strong>${orderAllocation.cashAmount.toFixed(2)}</strong></span>
+        </div>
+      )}
       <div className="checkout-total">
         <span>Due today</span>
-        <strong>${price.toFixed(2)}</strong>
+        <strong>${dueToday.toFixed(2)}</strong>
       </div>
       <p className="payment-section-title">Subscription payment method</p>
       <label className="payment-option">

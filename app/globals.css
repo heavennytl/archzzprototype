@@ -2526,6 +2526,50 @@ body{font-family:"Helvetica Neue",Arial,sans-serif}
 .checkout-modal .benefit-picker{
   margin:14px 0 18px;
 }
+.cart-discount-line{
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid #e3dfd9;
+  color:#7f1717;
+}
+.image-search-modal,
+.confirm-modal{
+  width:min(460px,calc(100vw - 48px));
+}
+.image-search-modal h2,
+.confirm-modal h2{
+  margin:4px 0 18px;
+}
+.image-upload-box{
+  min-height:170px;
+  margin-bottom:18px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  border:1px dashed #aaa49c;
+  background:#faf9f7;
+  cursor:pointer;
+}
+.image-upload-box span{
+  color:#777;
+  font-size:13px;
+}
+.image-upload-box input{
+  position:absolute;
+  width:1px;
+  height:1px;
+  opacity:0;
+}
+.confirm-modal>p:not(.kicker){
+  margin:0 0 24px;
+  color:#555;
+  line-height:1.55;
+}
+.danger-text{
+  color:#9b1717;
+}
 .legacy-heading{
   align-items:center;
 }
