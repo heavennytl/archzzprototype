@@ -25,10 +25,12 @@ npm run dev
 - My Assets、Favorites、Plan & Unlocks
 - Guest、Basic、Pro 演示状态和响应式布局
 
-## 产品文档
+## 设计参考素材
 
-- `docs/PRD-v3.md`
-- `docs/content-data-governance-standard.md`
+- `design-references/brand/`：品牌字标方案与预览图
+- `design-references/homepage-concepts/`：首页视觉方向稿
+
+这些文件仅用于设计回溯，不参与应用运行；线上使用的图片和图标统一放在 `public/`。
 
 ## 校验
 

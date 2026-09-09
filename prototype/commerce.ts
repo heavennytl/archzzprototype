@@ -19,8 +19,8 @@ export const defaultBenefitChoices: BenefitChoice[] = [
 export const legacyBenefitMeta = [
   { key: "welcome" as const, balanceKey: "welcomeDownloads" as const, label: "Welcome Coupon", expires: "Sep 10, 2026" },
   { key: "invitation" as const, balanceKey: "invitationDownloads" as const, label: "Invitation Coupon", expires: "Sep 30, 2026" },
-  { key: "vipCredits" as const, balanceKey: "vipCredits" as const, label: "Legacy VIP credits", expires: "Oct 07, 2026" },
-  { key: "downloadCredits" as const, balanceKey: "downloadCredits" as const, label: "Download Credits", expires: "Dec 31, 2026" },
+  { key: "vipCredits" as const, balanceKey: "vipCredits" as const, label: "Legacy VIP Credits", expires: "Oct 07, 2026" },
+  { key: "downloadCredits" as const, balanceKey: "downloadCredits" as const, label: "Legacy Download Credits", expires: "Dec 31, 2026" },
 ];
 
 export function allocateBenefits(
@@ -88,11 +88,11 @@ export function entitlementLabel(
   cashUnitPrice = MODEL_PRICE,
 ) {
   return source === "welcome"
-    ? "Welcome download"
+    ? "Welcome Coupon"
     : source === "invitation"
-      ? "Invitation reward"
+      ? "Invitation Coupon"
       : source === "vipCredits"
-        ? "Legacy VIP credit"
+        ? "Legacy VIP Credit"
         : source === "downloadCredits"
           ? "Legacy Download Credit"
           : source === "planCredits"

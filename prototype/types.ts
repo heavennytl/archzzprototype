@@ -44,7 +44,8 @@ export type Model = {
   category: string;
   image: string;
   images?: string[];
-  checked: boolean;
+  available: boolean;
+  qualityChecked: boolean;
   free?: boolean;
   version?: string;
   renderer?: string;
@@ -75,6 +76,7 @@ export type BillingRecord = {
   title: string;
   date: string;
   amount: string;
+  channel: "PayPal" | "Antom" | "DANA";
   status: TransactionStatus;
   kind: "Subscription" | "Legacy VIP" | "Legacy credits";
   seeded?: boolean;

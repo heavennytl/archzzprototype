@@ -78,6 +78,7 @@ export default function Prototype() {
   const [mobileNav, setMobileNav] = useState(false),
     [freeClaimed, setFreeClaimed] = useState(0),
     [toast, setToast] = useState("");
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [searchType, setSearchType] = useState("All formats"),
     [accountTab, setAccountTab] = useState<AccountTab>("My Assets");
   const [legacyBenefits, setLegacyBenefits] = useState<LegacyBenefits>({
@@ -111,6 +112,20 @@ export default function Prototype() {
     [billingRecords, setBillingRecords] = useState<BillingRecord[]>([...initialBillingRecords]),
     [creditUsed, setCreditUsed] = useState(0),
     [infoKey, setInfoKey] = useState<InfoKey>("about");
+  function showToast(message: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(message);
+    toastTimerRef.current = setTimeout(() => {
+      setToast("");
+      toastTimerRef.current = null;
+    }, 3000);
+  }
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    },
+    [],
+  );
   function navigate(next: Page) {
     setPage(next);
     setMobileNav(false);
@@ -176,9 +191,9 @@ export default function Prototype() {
   }
   function addToCart(id: number): boolean {
     const model = catalog.find((item) => item.id === id);
-    if (!model?.checked || model.free || owned.includes(id)) {
-      setToast(
-        model && !model.checked
+    if (!model?.available || model.free || owned.includes(id)) {
+      showToast(
+        model && !model.available
           ? "This item is unavailable"
           : "This model is already in My Assets.",
       );
@@ -191,37 +206,35 @@ export default function Prototype() {
       return false;
     }
     if (!cart.includes(id) && cart.length >= CART_LIMIT) {
-      setToast(`Your cart can hold up to ${CART_LIMIT} models.`);
-      setTimeout(() => setToast(""), 2200);
+      showToast(`Your cart can hold up to ${CART_LIMIT} models.`);
       return false;
     }
     setCart((v) => (v.includes(id) ? v : [...v, id]));
     setCartSelection((v) => (v.includes(id) ? v : [...v, id]));
-    setToast("Added to cart");
-    setTimeout(() => setToast(""), 1800);
+    showToast("Added to cart");
     return true;
   }
   function primaryAction(model: Model) {
     setSelected(model);
     setSuccessCount(1);
-    if (!model.checked) return setToast("This item is unavailable");
+    if (!model.available) return showToast("This item is unavailable");
     if (owned.includes(model.id)) {
       setModal("none");
-      setToast("Download started");
-      return setTimeout(() => setToast(""), 1800);
+      showToast("Download started");
+      return;
     }
     if (user === "guest") {
       setAuthIntent("primary");
       return setModal("auth");
     }
     if (model.free) {
-      if (freeClaimed >= 3) return setToast("Today’s free limit reached");
+      if (freeClaimed >= 3) return showToast("Today’s free limit reached");
       setOwned((v) => [...v, model.id]);
       setFreeClaimed((v) => v + 1);
       addOrders([model.id], "Free download");
       setModal("none");
-      setToast("Download started. This model is now in My Assets.");
-      return setTimeout(() => setToast(""), 1800);
+      showToast("Download started. This model is now in My Assets.");
+      return;
     }
     setModal("checkout");
   }
@@ -234,25 +247,25 @@ export default function Prototype() {
     if (authIntent === "favorite") {
       setFavorites((v) => (v.includes(selected.id) ? v : [...v, selected.id]));
       setModal("none");
-      setToast("Saved to Favorites");
+      showToast("Saved to Favorites");
     } else if (authIntent === "cart") {
       setCart((v) => (v.includes(selected.id) ? v : [...v, selected.id]));
       setCartSelection((v) =>
         v.includes(selected.id) ? v : [...v, selected.id],
       );
       setModal("none");
-      setToast("Added to cart");
+      showToast("Added to cart");
     } else if (authIntent === "cartCheckout") setModal("cartCheckout");
     else if (authIntent === "primary" && selected.free) {
       if (freeClaimed >= 3) {
         setModal("none");
-        setToast("Today’s free limit reached");
+        showToast("Today’s free limit reached");
       } else {
         setOwned((v) => (v.includes(selected.id) ? v : [...v, selected.id]));
         setFreeClaimed((v) => v + 1);
         addOrders([selected.id], "Free download");
         setModal("none");
-        setToast("Download started. This model is now in My Assets.");
+        showToast("Download started. This model is now in My Assets.");
       }
     } else if (authIntent === "primary") setModal("checkout");
     else if (authIntent === "plan" && pendingPlan)
@@ -329,7 +342,7 @@ export default function Prototype() {
   ) {
     if (user === mode) return;
     if (user === "max" && mode === "pro") {
-      setToast("You can choose Pro after your current Max plan ends.");
+      showToast("You can choose Pro after your current Max plan ends.");
       return;
     }
     setSubscriptionResume(resume);
@@ -341,7 +354,7 @@ export default function Prototype() {
       setModal("subscriptionCheckout");
     }
   }
-  function completeSubscription() {
+  function completeSubscription(channel: BillingRecord["channel"] = "PayPal") {
     if (!pendingPlan) return;
     const upgrading = user === "pro" && pendingPlan === "max";
     const resumeIds =
@@ -378,6 +391,7 @@ export default function Prototype() {
             : "$14.99",
         status: "Paid",
         kind: "Subscription",
+        channel,
       };
       return resumingBillingId
         ? records.map((record) =>
@@ -501,8 +515,7 @@ export default function Prototype() {
           setModal("none");
           setAccountTab("My Assets");
           navigate("home");
-          setToast("Signed out");
-          setTimeout(() => setToast(""), 1800);
+          showToast("Signed out");
         }}
         notificationCount={notifications.filter((item) => item.unread).length}
         onNotifications={() => openAccount("Notifications")}
@@ -650,7 +663,7 @@ export default function Prototype() {
           onOpen={openModel}
           onBrowse={() => navigate("search")}
           onPricing={() => navigate("pricing")}
-          onDemoDownload={() => setToast("Download started")}
+          onDemoDownload={() => showToast("Download started")}
           onOrderAction={(order) => {
             const orderModel = catalog.find((model) => model.id === order.modelId);
             if (!orderModel) return;
@@ -661,7 +674,7 @@ export default function Prototype() {
           onBillingAction={(record) => {
             const plan = record.title.toLowerCase().includes("max") ? "max" : "pro";
             if (user === "max" || (user === "pro" && plan === "pro")) {
-              setToast("This pending subscription is no longer payable.");
+              showToast("This pending subscription is no longer payable.");
               return;
             }
             setPendingPlan(plan);
@@ -674,13 +687,10 @@ export default function Prototype() {
               setModal("cancelRenewal");
             } else {
               setAutoRenew(true);
-              setToast("Auto-renewal resumed.");
+              showToast("Auto-renewal resumed.");
             }
           }}
-          onAccountNotice={(message) => {
-            setToast(message);
-            setTimeout(() => setToast(""), 1800);
-          }}
+          onAccountNotice={showToast}
           onReadAllNotifications={() =>
             setNotifications((items) => items.map((item) => ({ ...item, unread: false })))
           }
@@ -789,7 +799,7 @@ export default function Prototype() {
               onConfirm={() => {
                 setAutoRenew(false);
                 setModal("none");
-                setToast("Auto-renewal cancelled. Access remains active through Oct 07, 2026.");
+                showToast("Auto-renewal cancelled. Access remains active through Oct 07, 2026.");
               }}
             />
           )}{" "}
@@ -832,8 +842,7 @@ export default function Prototype() {
               onClose={() => setModal("none")}
               onDownload={() => {
                 setModal("none");
-                setToast("Download started");
-                setTimeout(() => setToast(""), 1800);
+                showToast("Download started");
               }}
               onAssets={() => {
                 setModal("none");
@@ -1293,7 +1302,7 @@ function Home({
         eyebrow=""
         title="Popular models"
         subtitle=""
-        items={catalog.filter((model) => model.checked).slice(0, 15)}
+        items={catalog.filter((model) => model.available).slice(0, 15)}
         onOpen={onOpen}
         favorites={favorites}
         owned={owned}
@@ -1427,7 +1436,7 @@ function SearchResults({
         .includes(token),
     );
   const filtered = catalog
-      .filter((item) => item.checked)
+      .filter((item) => item.available)
       .filter(matchesQuery)
       .filter(
         (item) =>
@@ -1608,16 +1617,16 @@ function ProductDetail({
 }) {
   const [activeImage, setActiveImage] = useState(0);
   const subscribed = user === "pro" || user === "max",
-    available = model.checked;
+    available = model.available;
   const sameCategory = catalog.filter(
       (item) =>
-        item.checked &&
+        item.available &&
         item.id !== model.id &&
         item.category === model.category,
     ),
     sameSoftware = catalog.filter(
       (item) =>
-        item.checked &&
+        item.available &&
         item.id !== model.id &&
         item.type === model.type &&
         !sameCategory.some((relatedModel) => relatedModel.id === item.id),
@@ -1727,7 +1736,7 @@ function ProductDetail({
               {model.renderer && (
                 <span className="software-label">{model.renderer}</span>
               )}
-              {available && (
+              {model.qualityChecked && (
                 <span
                   className="quality-label"
                   title="Quality checked"
@@ -1917,7 +1926,7 @@ function FreePage({
                 <div className="card-software-tags">
                   <span>{model.type}</span>
                   {model.renderer && <span>{model.renderer}</span>}
-                  {model.checked && <span className="quality-tag"><Icon name="check" size={12} /></span>}
+                  {model.qualityChecked && <span className="quality-tag"><Icon name="check" size={12} /></span>}
                 </div>
                 <button
                   className="claim-button"
@@ -2013,6 +2022,10 @@ function Pricing({
           [
             "Do unused credits roll over?",
             "No. Credits reset on your monthly billing date and unused credits expire.",
+          ],
+          [
+            "When will my plan renew?",
+            "Your next renewal date is shown in Plan & Unlocks.",
           ],
           [
             "Can I upgrade or cancel?",
@@ -2414,6 +2427,7 @@ function Assets({
             legacyBenefits={legacyBenefits}
             hasLegacyBenefits={hasLegacyBenefits}
             autoRenew={autoRenew}
+            renewalRetrying={user === "pro" && creditUsed >= 30}
             onPricing={onPricing}
             onToggleRenew={onToggleRenew}
           />
@@ -2458,7 +2472,7 @@ function Assets({
                 <div className="card-software-tags account-card-tags">
                   <span>{item.type}</span>
                   {item.renderer && <span>{item.renderer}</span>}
-                  {item.checked && <span className="quality-tag"><Icon name="check" size={12} /></span>}
+                  {item.qualityChecked && <span className="quality-tag"><Icon name="check" size={12} /></span>}
                 </div>
                 {tab === "My Assets" ? (
                   <button className="download-button" onClick={onDemoDownload}>
@@ -2552,6 +2566,7 @@ function PlanUnlocks({
   legacyBenefits,
   hasLegacyBenefits,
   autoRenew,
+  renewalRetrying,
   onPricing,
   onToggleRenew,
 }: {
@@ -2561,6 +2576,7 @@ function PlanUnlocks({
   legacyBenefits: LegacyBenefits;
   hasLegacyBenefits: boolean;
   autoRenew: boolean;
+  renewalRetrying: boolean;
   onPricing: () => void;
   onToggleRenew: () => void;
 }) {
@@ -2582,11 +2598,19 @@ function PlanUnlocks({
         </div>
         <p>
           {subscribed
-            ? `${planCredits} credits remaining this billing period.`
+            ? renewalRetrying
+              ? "Payment is being retried. Plan credits are temporarily unavailable."
+              : `${planCredits} credits remaining this billing period.`
             : "Choose Pro or Max to get monthly credits."}
         </p>
         {subscribed && (
           <>
+            {renewalRetrying && (
+              <div className="plan-payment-alert" role="status">
+                <b>Payment retrying</b>
+                <span>PayPal will retry automatically. Check your payment method if needed.</span>
+              </div>
+            )}
             <div className="plan-progress" aria-label={`${planCredits} of ${planTotal} credits remaining`}>
               <div>
                 <span>USED {creditUsed}</span>
@@ -2629,12 +2653,12 @@ function PlanUnlocks({
             <small>Expires Sep 30, 2026</small>
           </div>
           <div>
-            <span>Legacy VIP credits</span>
+            <span>Legacy VIP Credits</span>
             <b>{legacyBenefits.vipCredits} remaining</b>
             <small>Expires Oct 07, 2026</small>
           </div>
           <div>
-            <span>Download Credits</span>
+            <span>Legacy Download Credits</span>
             <b>{legacyBenefits.downloadCredits} remaining</b>
             <small>Expires Dec 31, 2026</small>
           </div>
@@ -2762,22 +2786,28 @@ function OrderHistory({
               <b>{record.date}</b>
             </div>
             <div>
+              <span>Payment</span>
+              <b>{record.channel}</b>
+            </div>
+            <div>
               <span>Amount</span>
               <b>{record.amount}</b>
             </div>
-            <strong
-              className={`order-status ${record.status.toLowerCase().replace(" ", "-")}`}
-            >
-              {record.status}
-            </strong>
-            {canContinueSubscription && (
-              <button
-                className="order-action"
-                onClick={() => onBillingAction(record)}
+            <div className="order-state">
+              <strong
+                className={`order-status ${record.status.toLowerCase().replace(" ", "-")}`}
               >
-                Continue payment
-              </button>
-            )}
+                {record.status}
+              </strong>
+              {canContinueSubscription && (
+                <button
+                  className="order-action"
+                  onClick={() => onBillingAction(record)}
+                >
+                  Continue payment
+                </button>
+              )}
+            </div>
           </article>;
         })}
     </div>
@@ -2957,7 +2987,7 @@ function ModelCard({
   onFavorite: (id: number) => void;
   onCart: (id: number) => boolean;
 }) {
-  const unavailable = !model.checked,
+  const unavailable = !model.available,
     purchasable = !owned && !model.free && !unavailable,
     freeAction = !owned && model.free && !unavailable,
     saves = 180 + model.id * 39 + (favorite ? 1 : 0);
@@ -2993,7 +3023,7 @@ function ModelCard({
         <div className="card-software-tags">
           <span>{model.type}</span>
           {model.renderer && <span>{model.renderer}</span>}
-          {model.checked && (
+          {model.qualityChecked && (
             <span className="quality-tag" title="Quality checked" aria-label="Quality checked">
               <Icon name="check" size={13} />
             </span>
@@ -3301,7 +3331,7 @@ function Checkout({
   hasLegacyBenefits: boolean;
   benefitChoices: BenefitChoice[];
   onBenefitChoices: (choices: BenefitChoice[]) => void;
-  onPay: () => void;
+  onPay: (channel: "PayPal" | "Antom" | "DANA") => void;
   onUpgrade: () => void;
   onChoosePlan: (plan: "pro" | "max") => void;
   onPricing: () => void;
@@ -3400,7 +3430,7 @@ function Checkout({
           </label>
         </>
       )}
-      <button className="primary-cta" onClick={onPay}>
+      <button className="primary-cta" onClick={() => onPay(paymentMethod)}>
         {allocation.cashAmount > 0
           ? `Continue to ${paymentMethod}`
           : "Confirm access"}
@@ -3439,7 +3469,7 @@ function SubscriptionCheckout({
   allowBenefitSelection?: boolean;
   onBack?: () => void;
   backLabel?: string;
-  onPay: () => void;
+  onPay: (channel: "PayPal" | "Antom" | "DANA") => void;
 }) {
   const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "Antom" | "DANA">("PayPal");
   const planName = plan === "max" ? "Max" : "Pro";
@@ -3537,7 +3567,7 @@ function SubscriptionCheckout({
       <div className="renewal-note">
         Renews monthly at ${renewalPrice.toFixed(2)} · Cancel anytime
       </div>
-      <button className="primary-cta" onClick={onPay}>
+      <button className="primary-cta" onClick={() => onPay(paymentMethod)}>
         Continue to {paymentMethod}
       </button>
       <p className="legal-note">

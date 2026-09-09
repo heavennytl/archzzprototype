@@ -49,12 +49,12 @@ export const initialOrders: OrderRecord[] = [
 ];
 
 export const initialBillingRecords: BillingRecord[] = [
-  { id: "BILL-VIP-0726", title: "Legacy VIP monthly", date: "Jul 26, 2026", amount: "$5.00", status: "Paid", kind: "Legacy VIP", seeded: true },
-  { id: "BILL-CREDIT-0612", title: "Download Credits ×45", date: "Jun 12, 2026", amount: "$10.00", status: "Paid", kind: "Legacy credits", seeded: true },
-  { id: "BILL-SUB-PENDING-0828", title: "Pro monthly subscription", date: "Aug 28, 2026", amount: "$14.99", status: "Pending", kind: "Subscription", seeded: true },
-  { id: "BILL-SUB-PROCESSING-0829", title: "Max monthly subscription", date: "Aug 29, 2026", amount: "$49.99", status: "Processing", kind: "Subscription", seeded: true },
-  { id: "BILL-SUB-FAILED-0830", title: "Pro monthly subscription", date: "Aug 30, 2026", amount: "$14.99", status: "Failed", kind: "Subscription", seeded: true },
-  { id: "BILL-SUB-EXPIRED-0831", title: "Max monthly subscription", date: "Aug 31, 2026", amount: "$49.99", status: "Expired", kind: "Subscription", seeded: true },
-  { id: "BILL-LEGACY-REFUNDING-0901", title: "Legacy Download Credits", date: "Sep 01, 2026", amount: "$10.00", status: "Refund processing", kind: "Legacy credits", seeded: true },
-  { id: "BILL-LEGACY-REFUNDED-0902", title: "Legacy VIP monthly", date: "Sep 02, 2026", amount: "$5.00", status: "Refunded", kind: "Legacy VIP", seeded: true },
+  { id: "BILL-VIP-0726", title: "Legacy VIP monthly", date: "Jul 26, 2026", amount: "$5.00", channel: "PayPal", status: "Paid", kind: "Legacy VIP", seeded: true },
+  { id: "BILL-CREDIT-0612", title: "Legacy Download Credits ×45", date: "Jun 12, 2026", amount: "$10.00", channel: "Antom", status: "Paid", kind: "Legacy credits", seeded: true },
+  { id: "BILL-SUB-PENDING-0828", title: "Pro monthly subscription", date: "Aug 28, 2026", amount: "$14.99", channel: "PayPal", status: "Pending", kind: "Subscription", seeded: true },
+  { id: "BILL-SUB-PROCESSING-0829", title: "Max monthly subscription", date: "Aug 29, 2026", amount: "$49.99", channel: "DANA", status: "Processing", kind: "Subscription", seeded: true },
+  { id: "BILL-SUB-FAILED-0830", title: "Pro monthly subscription", date: "Aug 30, 2026", amount: "$14.99", channel: "PayPal", status: "Failed", kind: "Subscription", seeded: true },
+  { id: "BILL-SUB-EXPIRED-0831", title: "Max monthly subscription", date: "Aug 31, 2026", amount: "$49.99", channel: "PayPal", status: "Expired", kind: "Subscription", seeded: true },
+  { id: "BILL-LEGACY-REFUNDING-0901", title: "Legacy Download Credits", date: "Sep 01, 2026", amount: "$10.00", channel: "Antom", status: "Refund processing", kind: "Legacy credits", seeded: true },
+  { id: "BILL-LEGACY-REFUNDED-0902", title: "Legacy VIP monthly", date: "Sep 02, 2026", amount: "$5.00", channel: "PayPal", status: "Refunded", kind: "Legacy VIP", seeded: true },
 ];
