@@ -18,7 +18,7 @@ export const initialNotifications: NotificationRecord[] = [
   {
     id: "renewal-failed",
     title: "Renewal payment failed",
-    message: "Pro renewal failed. PayPal will retry automatically. Check your payment method.",
+    message: "PayPal will retry automatically. Please check your payment method.",
     time: "Just now",
     unread: true,
   },
@@ -32,20 +32,20 @@ export const initialNotifications: NotificationRecord[] = [
   {
     id: "renewal-expired",
     title: "Subscription expired",
-    message: "Payment failed after two retries. Subscribe again to restore plan access.",
+    message: "Payment failed after two retries. Subscribe again to continue with Pro.",
     time: "Aug 18",
     unread: false,
   },
 ];
 
 export const initialOrders: OrderRecord[] = [
-  { id: "AZ-REFUND-2408", modelId: 2, date: "Aug 18, 2026", access: "$1.99 refunded · License and download access revoked", status: "Refunded", seeded: true },
+  { id: "AZ-REFUND-2408", modelId: 2, date: "Aug 18, 2026", access: "Access revoked", status: "Refunded", seeded: true },
   { id: "AZ-REFUNDING-2410", modelId: 1, date: "Aug 20, 2026", access: "Access remains until refund completes", status: "Refund processing", seeded: true },
-  { id: "AZ-PENDING-2412", modelId: 3, date: "Aug 22, 2026", access: "Payment required · 11:42 remaining", status: "Pending", seeded: true },
-  { id: "AZ-FAILED-2414", modelId: 4, date: "Aug 24, 2026", access: "Payment failed · no access granted", status: "Failed", seeded: true },
-  { id: "AZ-PROCESSING-2415", modelId: 5, date: "Aug 25, 2026", access: "Payment received · granting access", status: "Processing", seeded: true },
-  { id: "AZ-EXPIRED-2416", modelId: 6, date: "Aug 26, 2026", access: "Payment window expired · no access granted", status: "Expired", seeded: true },
-  { id: "AZ-CREDIT-REFUND-2417", modelId: 7, date: "Aug 27, 2026", access: "Pro credit not returned · License and access revoked", status: "Refunded", seeded: true },
+  { id: "AZ-PENDING-2412", modelId: 3, date: "Aug 22, 2026", access: "Payment due · 11:42 left", status: "Pending", seeded: true },
+  { id: "AZ-FAILED-2414", modelId: 4, date: "Aug 24, 2026", access: "Not granted", status: "Failed", seeded: true },
+  { id: "AZ-PROCESSING-2415", modelId: 5, date: "Aug 25, 2026", access: "Granting access", status: "Processing", seeded: true },
+  { id: "AZ-EXPIRED-2416", modelId: 6, date: "Aug 26, 2026", access: "Not granted", status: "Expired", seeded: true },
+  { id: "AZ-CREDIT-REFUND-2417", modelId: 7, date: "Aug 27, 2026", access: "Access revoked · Credit not returned", status: "Refunded", seeded: true },
 ];
 
 export const initialBillingRecords: BillingRecord[] = [

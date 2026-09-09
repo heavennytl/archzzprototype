@@ -20,8 +20,7 @@ export function Modal({ children, onClose }: { children: ReactNode; onClose: () 
 export function Auth({ onContinue }: { onContinue: () => void }) {
   return (
     <div className="auth-modal">
-      <p className="kicker">SIGN IN</p>
-      <h2>Sign in to continue.</h2>
+      <h2>Sign in to continue</h2>
       <button className="google-button" onClick={onContinue}>
         <img src="/google-g.svg" alt="" aria-hidden="true" />
         Continue with Google
@@ -29,7 +28,6 @@ export function Auth({ onContinue }: { onContinue: () => void }) {
       <div className="or"><span />or<span /></div>
       <label>Email address<input type="email" placeholder="you@studio.com" /></label>
       <button className="primary-cta" onClick={onContinue}>Continue with email</button>
-      <small>You’ll return here after sign-in.</small>
     </div>
   );
 }

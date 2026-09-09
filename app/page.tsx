@@ -180,7 +180,7 @@ export default function Prototype() {
       setToast(
         model && !model.checked
           ? "This item is unavailable"
-          : "This model is already available to you",
+          : "This model is already in My Assets.",
       );
       return false;
     }
@@ -191,7 +191,7 @@ export default function Prototype() {
       return false;
     }
     if (!cart.includes(id) && cart.length >= CART_LIMIT) {
-      setToast(`Cart limit reached · Maximum ${CART_LIMIT} models per order`);
+      setToast(`Your cart can hold up to ${CART_LIMIT} models.`);
       setTimeout(() => setToast(""), 2200);
       return false;
     }
@@ -220,7 +220,7 @@ export default function Prototype() {
       setFreeClaimed((v) => v + 1);
       addOrders([model.id], "Free download");
       setModal("none");
-      setToast("Download started · Saved to My Assets");
+      setToast("Download started. This model is now in My Assets.");
       return setTimeout(() => setToast(""), 1800);
     }
     setModal("checkout");
@@ -252,7 +252,7 @@ export default function Prototype() {
         setFreeClaimed((v) => v + 1);
         addOrders([selected.id], "Free download");
         setModal("none");
-        setToast("Download started · Saved to My Assets");
+        setToast("Download started. This model is now in My Assets.");
       }
     } else if (authIntent === "primary") setModal("checkout");
     else if (authIntent === "plan" && pendingPlan)
@@ -263,7 +263,7 @@ export default function Prototype() {
       navigate("assets");
     } else {
       setModal("none");
-      setToast("Signed in successfully");
+      setToast("");
     }
     setAuthIntent("none");
   }
@@ -329,7 +329,7 @@ export default function Prototype() {
   ) {
     if (user === mode) return;
     if (user === "max" && mode === "pro") {
-      setToast("Cancel Max first; Pro can be selected after the current cycle ends.");
+      setToast("You can choose Pro after your current Max plan ends.");
       return;
     }
     setSubscriptionResume(resume);
@@ -674,7 +674,7 @@ export default function Prototype() {
               setModal("cancelRenewal");
             } else {
               setAutoRenew(true);
-              setToast("Auto-renewal restored.");
+              setToast("Auto-renewal resumed.");
             }
           }}
           onAccountNotice={(message) => {
@@ -957,7 +957,7 @@ function ExtraCategories({
   if (!target) return null;
   const items = [
     { n: "Tables", image: models[7].image },
-    { n: "Decor", image: models[5].image },
+    { n: "Decorations", image: models[5].image },
   ];
   return createPortal(
     <>
@@ -1011,9 +1011,9 @@ function Header({
 }) {
   const modelCategories = [
     "Furniture", "Residential Interior", "Commercial Interior",
-    "Fixed-components", "Decorations", "Lamps", "Home Accessories",
-    "Landscape", "Plant", "Curtains & Fabrics", "Architecture",
-    "Characters", "Vehicle", "Exhibition", "Display", "Stage",
+    "Built-in Components", "Decorations", "Lighting", "Home Accessories",
+    "Landscape", "Plants", "Curtains & Fabrics", "Architecture",
+    "Characters", "Vehicles", "Exhibitions", "Displays", "Stages",
     "3D Materials", "Advertising Signage",
   ];
   const nav = [
@@ -1024,13 +1024,13 @@ function Header({
     },
     {
       label: "SketchUp Models",
-      active: page === "search" && searchType === "SketchUp",
-      action: () => onSearchFor("SketchUp models", "SketchUp"),
+      active: page === "search" && searchType === ".skp",
+      action: () => onSearchFor("SketchUp models", ".skp"),
     },
     {
       label: "3ds Max Models",
-      active: page === "search" && searchType === "3ds Max",
-      action: () => onSearchFor("3ds Max models", "3ds Max"),
+      active: page === "search" && searchType === ".max",
+      action: () => onSearchFor("3ds Max models", ".max"),
     },
     {
       label: "Today’s Free",
@@ -1058,9 +1058,9 @@ function Header({
         <nav className={mobileNav ? "nav open" : "nav"}>
           {nav.map((item) => {
             const modelType = item.label === "SketchUp Models"
-              ? "SketchUp"
+              ? ".skp"
               : item.label === "3ds Max Models"
-                ? "3ds Max"
+                ? ".max"
                 : null;
             return modelType ? (
               <div className="nav-dropdown" key={item.label}>
@@ -1217,8 +1217,8 @@ function Home({
             </h1>
           </div>
           <p>
-            Search a million-plus professional assets, inspect the files you’ll
-            receive, and unlock exactly what you need.
+            Search over a million professional models, check compatibility and
+            details, and get exactly what you need.
           </p>
         </div>
         <form className="hero-search" onSubmit={onSearch}>
@@ -1277,9 +1277,9 @@ function Home({
             { n: "Lighting", image: models[2].image },
             { n: "Plants", image: models[3].image },
             { n: "Kitchens", image: models[8].image },
-            { n: "Interior scenes", image: models[5].image },
+            { n: "Residential Interior", image: models[5].image },
             { n: "Architecture", image: models[4].image },
-            { n: "Office", image: models[9].image },
+            { n: "Commercial Interior", image: models[9].image },
             { n: "Landscape", image: models[11].image },
           ].map((item) => (
             <button key={item.n} onClick={() => onSearchFor(item.n)}>
@@ -1311,8 +1311,8 @@ function Home({
             Choose any 3 today.
           </h2>
           <p>
-            20 SketchUp and 20 3ds Max assets refresh daily and stay in My
-            Assets after download.
+            A new selection of 20 SketchUp and 20 3ds Max models appears daily.
+            Your downloads stay in My Assets.
           </p>
           <button onClick={() => onNavigate("free")}>
             Explore today’s selection <Icon name="arrow" />
@@ -1334,13 +1334,13 @@ function Home({
         </div>
         <div>
           <span className="trust-symbol">01</span>
-          <b>One model, one clear price</b>
-          <p>$1.99 buy once, or unlock with a plan.</p>
+          <b>Flexible ways to access models</b>
+          <p>Buy once or use a plan credit.</p>
         </div>
         <div>
           <span className="trust-symbol">∞</span>
-          <b>Keep what you unlock</b>
-          <p>Permanent access from My Assets.</p>
+          <b>Keep access to unlocked models</b>
+          <p>Unlocked models stay in My Assets.</p>
         </div>
         <div>
           <Icon name="download" size={28} />
@@ -1380,11 +1380,11 @@ function SearchResults({
   onImageSearch: () => void;
 }) {
   const [category, setCategory] = useState("All categories"),
-    [keyword, setKeyword] = useState("All keywords"),
+    [keyword, setKeyword] = useState("All styles"),
     [renderer, setRenderer] = useState("All renderers"),
     [visibleCount, setVisibleCount] = useState(40);
   const keywordOptions = [
-      "All keywords",
+      "All styles",
       "Modern",
       "Minimalist",
       "Wabi-Sabi",
@@ -1409,7 +1409,9 @@ function SearchResults({
     displayTitle = channelEntry
       ? type === "All formats"
         ? "All models"
-        : `${type} models`
+        : type === ".skp"
+          ? "SketchUp models"
+          : "3ds Max models"
       : query || "All models",
     tokens = normalized
       .split(/\s+/)
@@ -1427,13 +1429,18 @@ function SearchResults({
   const filtered = catalog
       .filter((item) => item.checked)
       .filter(matchesQuery)
-      .filter((item) => type === "All formats" || item.type === type)
+      .filter(
+        (item) =>
+          type === "All formats" ||
+          (type === ".skp" && item.type === "SketchUp") ||
+          (type === ".max" && item.type === "3ds Max"),
+      )
       .filter(
         (item) => category === "All categories" || item.category === category,
       )
       .filter(
         (item) =>
-          keyword === "All keywords" ||
+          keyword === "All styles" ||
           `${item.title} ${item.category}`
             .toLowerCase()
             .includes(keyword.toLowerCase()),
@@ -1453,7 +1460,7 @@ function SearchResults({
     onQuery("");
     onType("All formats");
     setCategory("All categories");
-    setKeyword("All keywords");
+    setKeyword("All styles");
     setRenderer("All renderers");
   };
   return (
@@ -1492,7 +1499,7 @@ function SearchResults({
           <FilterSelect
             value={type}
             onChange={onType}
-            options={["All formats", "SketchUp", "3ds Max"]}
+            options={["All formats", ".skp", ".max"]}
           />
           <FilterSelect
             value={category}
@@ -1514,9 +1521,8 @@ function SearchResults({
       <section className="results">
         <div className="results-head">
           <div>
-            <p className="kicker">CATALOG RESULTS</p>
+            <p className="kicker">SEARCH RESULTS</p>
             <h1>{displayTitle}</h1>
-            <span>{filtered.length} matching models</span>
           </div>
         </div>
         {filtered.length ? (
@@ -1836,7 +1842,7 @@ function ProductDetail({
       <ModelSection
         eyebrow=""
         title="Related models"
-        subtitle="Similar models."
+        subtitle=""
         items={related}
         onOpen={onOpen}
         favorites={favorites}
@@ -1865,7 +1871,7 @@ function FreePage({
     <main className="free-page">
       <section className="free-hero">
         <div>
-          <p className="kicker light">TODAY’S FREE · REFRESHES 00:00 UTC</p>
+          <p className="kicker light">TODAY’S FREE · REFRESHES AT 00:00 UTC</p>
           <h1>Choose any 3 models today.</h1>
           <p>
             Choose from 20 SketchUp and 20 3ds Max models. Downloaded models stay
@@ -1873,7 +1879,7 @@ function FreePage({
           </p>
         </div>
         <div className="free-counter">
-          <span>TODAY’S ALLOWANCE</span>
+          <span>TODAY’S DOWNLOADS</span>
           <strong>
             {3 - claimed}
             <small>/ 3 left</small>
@@ -1896,7 +1902,7 @@ function FreePage({
         >
           3ds Max <span>20</span>
         </button>
-        <p>Choose across both tabs · {claimed} downloaded today</p>
+        <p>{claimed} of 3 downloads used today across both tabs</p>
       </div>
       <div className="free-grid">
         {todayFreeModels
@@ -1947,7 +1953,7 @@ function Pricing({
         <div>
           <h1>Choose how you access models.</h1>
           <p className="pricing-intro-subtitle">
-            Buy once or subscribe—everything you unlock stays yours.
+            Buy once or subscribe. Every model you unlock stays in My Assets.
           </p>
         </div>
       </section>
@@ -1962,19 +1968,17 @@ function Pricing({
             "Permanent access",
             "Standard commercial license",
           ]}
-          button="For comparison"
-          current
+          button="Browse models"
           onClick={onBrowse}
         />
         <Plan
           name="Pro"
           price="$14.99"
           suffix="per month"
-          description="For designers working on active projects."
+          description="For regular model downloads."
           features={[
             "30 credits each month",
-            "Credits reset each billing month",
-            "Unused credits do not roll over",
+            "Credits reset monthly and don’t roll over",
           ]}
           button={user === "pro" ? "Current plan" : "Choose Pro"}
           current={user === "pro"}
@@ -1985,11 +1989,10 @@ function Pricing({
           name="Max"
           price="$49.99"
           suffix="per month"
-          description="For high-volume studios and visualizers."
+          description="For frequent, high-volume model downloads."
           features={[
             "150 credits each month",
-            "Credits reset each billing month",
-            "Unused credits do not roll over",
+            "Credits reset monthly and don’t roll over",
           ]}
           button={user === "max" ? "Current plan" : "Choose Max"}
           current={user === "max"}
@@ -2010,10 +2013,6 @@ function Pricing({
           [
             "Do unused credits roll over?",
             "No. Credits reset on your monthly billing date and unused credits expire.",
-          ],
-          [
-            "What if my billing date is at month-end?",
-            "Your payment provider applies the next valid billing date when a month is shorter.",
           ],
           [
             "Can I upgrade or cancel?",
@@ -2047,7 +2046,7 @@ function SubscriptionOffer({
   return (
     <div className="subscription-offer">
       <div className="subscription-offer-head">
-        <span>SAVE WITH A PLAN</span>
+        <span>PLAN OPTIONS</span>
         <button type="button" onClick={onLearnMore}>Learn more</button>
       </div>
       <button type="button" className="subscription-offer-row" onClick={() => onChoose("pro")}>
@@ -2089,7 +2088,7 @@ function BenefitPicker({
     <div className="benefit-picker">
       <div className="benefit-picker-head">
         <b>Use benefits</b>
-        {hasLegacyBenefits && <span>Applied by expiry date</span>}
+        {hasLegacyBenefits && <span>Expiring first</span>}
       </div>
       {hasLegacyBenefits && legacyBenefitMeta.map((item) => {
         const balance = legacyBenefits[item.balanceKey];
@@ -2103,7 +2102,7 @@ function BenefitPicker({
               onChange={() => toggle(item.key)}
             />
             <span><b>{item.label}</b><small>Expires {item.expires}</small></span>
-            <strong>{used ? `${used} used · ` : ""}{Math.max(0, balance - used)} left</strong>
+            <strong>{used ? `${used} applied · ` : ""}{Math.max(0, balance - used)} left</strong>
           </label>
         );
       })}
@@ -2115,11 +2114,11 @@ function BenefitPicker({
             onChange={() => toggle("planCredits")}
           />
           <span><b>{user === "max" ? "Max" : "Pro"} credits</b><small>Cycle ends Oct 07, 2026</small></span>
-          <strong>{allocation.planCredits ? `${allocation.planCredits} used · ` : ""}{Math.max(0, planBalance - allocation.planCredits)} left</strong>
+          <strong>{allocation.planCredits ? `${allocation.planCredits} applied · ` : ""}{Math.max(0, planBalance - allocation.planCredits)} left</strong>
         </label>
       )}
       <div className="benefit-cash-row">
-        <span><b>Cash fallback</b><small>For models not covered above</small></span>
+        <span><b>Pay for the rest</b></span>
         <strong>{allocation.cashModels ? `${allocation.cashModels} × $1.99` : "$1.99 / model"}</strong>
       </div>
     </div>
@@ -2178,7 +2177,6 @@ function CartPage({
   return (
     <main className="cart-page">
       <div className="cart-title">
-        <p className="kicker">YOUR SELECTION</p>
         <h1>
           Cart <span>{items.length}</span>
         </h1>
@@ -2201,7 +2199,7 @@ function CartPage({
                     onSelection(event.target.checked ? items.map((item) => item.id) : [])
                   }
                 />
-                Select all ({selectedItems.length})
+                Select all
               </label>
               <div className="cart-view-tabs">
                 <button
@@ -2297,7 +2295,7 @@ function CartPage({
               </div>
             )}
             <div className="total">
-              <span>Amount due</span>
+              <span>Due today</span>
               <strong>${allocation.cashAmount.toFixed(2)}</strong>
             </div>
             <button
@@ -2438,8 +2436,8 @@ function Assets({
             <AccountEmptyState
               icon="cart"
               title="No orders yet"
-              text="Purchases and model unlocks appear here."
-              note="Access status is shown per model"
+              text="Your paid and free model access will appear here."
+              note=""
               onBrowse={onBrowse}
             />
           )
@@ -2483,17 +2481,17 @@ function Assets({
             title={
               tab === "Favorites"
                 ? "Save models for later"
-                : "Your model library starts here"
+                : "No models yet"
             }
             text={
               tab === "Favorites"
-                ? "Select the heart to save a model."
-                : "Purchased and free models appear here."
+                ? "Use the heart icon to save models for later."
+                : "Models you buy or download will appear here."
             }
             note={
               tab === "Favorites"
-                ? "Your shortlist is private"
-                : "Available anytime"
+                ? ""
+                : ""
             }
             onBrowse={onBrowse}
           />
@@ -2567,7 +2565,7 @@ function PlanUnlocks({
   onToggleRenew: () => void;
 }) {
   const subscribed = user === "pro" || user === "max";
-  const planName = user === "max" ? "Max" : user === "pro" ? "Pro" : "Basic";
+  const planName = user === "max" ? "Max" : user === "pro" ? "Pro" : "No active plan";
   const planCredits = subscribed ? (user === "max" ? 150 : 30) - creditUsed : 0;
   const planTotal = user === "max" ? 150 : 30;
   const usedPercent = subscribed
@@ -2584,8 +2582,8 @@ function PlanUnlocks({
         </div>
         <p>
           {subscribed
-            ? `${planCredits} plan credits remaining this month.`
-            : "Subscribe for lower per-model pricing."}
+            ? `${planCredits} credits remaining this billing period.`
+            : "Choose Pro or Max to get monthly credits."}
         </p>
         {subscribed && (
           <>
@@ -2602,9 +2600,9 @@ function PlanUnlocks({
               </small>
             </div>
             <div className="plan-renewal-row">
-              <span>{autoRenew ? "Auto-renewal is on" : "Cancels Oct 07, 2026"}</span>
+              <span>{autoRenew ? "Auto-renewal is on" : "Access ends Oct 07, 2026"}</span>
               <button className="cancel-plan" onClick={onToggleRenew}>
-                {autoRenew ? "Cancel renewal" : "Restore renewal"}
+                {autoRenew ? "Cancel renewal" : "Resume auto-renewal"}
               </button>
             </div>
           </>
@@ -2618,16 +2616,15 @@ function PlanUnlocks({
       {hasLegacyBenefits && <section className="legacy-benefits">
         <div className="legacy-heading">
           <h3>Legacy benefits</h3>
-          <strong>Legacy user</strong>
         </div>
         <div className="legacy-grid">
           <div>
-            <span>Welcome credit</span>
+            <span>Welcome Coupon</span>
             <b>{legacyBenefits.welcomeDownloads} remaining</b>
             <small>Expires Sep 10, 2026</small>
           </div>
           <div>
-            <span>Invitation credit</span>
+            <span>Invitation Coupon</span>
             <b>{legacyBenefits.invitationDownloads} remaining</b>
             <small>Expires Sep 30, 2026</small>
           </div>
@@ -2684,14 +2681,12 @@ function OrderHistory({
       <div className="order-history-head">
         <span>
           {view === "models" ? orders.length : billingRecords.length}{" "}
-          {(view === "models" ? orders.length : billingRecords.length) === 1
-            ? "record"
-            : "records"}
+          {view === "models" ? "models" : "transactions"}
         </span>
         <small>
           {view === "models"
-            ? "Purchases, credits and free downloads"
-            : "Subscriptions and legacy paid benefits"}
+            ? "Paid and free model access"
+            : "Subscription and legacy benefit payments"}
         </small>
       </div>
       {view === "models" && orders.map((order) => {
@@ -2797,7 +2792,7 @@ function AccountSettings({ onEdit }: { onEdit: () => void }) {
           <div>
             <span>Nickname</span>
             <b>ArchZZ Designer</b>
-            <button onClick={onEdit}>EDIT</button>
+            <button onClick={onEdit}>Edit</button>
           </div>
           <div>
             <span>Email address</span>
@@ -2838,10 +2833,12 @@ function AccountEmptyState({
           Browse models
         </button>
       </div>
-      <p className="account-empty-note">
-        <Icon name="check" size={17} />
-        {note}
-      </p>
+      {note && (
+        <p className="account-empty-note">
+          <Icon name="check" size={17} />
+          {note}
+        </p>
+      )}
     </div>
   );
 }
@@ -3079,15 +3076,12 @@ function AutoLoadMore({
   hasMore: boolean;
   onLoad: () => void;
 }) {
+  if (!hasMore) return null;
   return (
-    <div className={hasMore ? "auto-load-more" : "auto-load-more complete"}>
-      {hasMore ? (
-        <button type="button" onClick={onLoad}>
-          Load more
-        </button>
-      ) : (
-        <span>All results shown</span>
-      )}
+    <div className="auto-load-more">
+      <button type="button" onClick={onLoad}>
+        Load more
+      </button>
     </div>
   );
 }
@@ -3176,7 +3170,7 @@ function Plan({
 }) {
   return (
     <article className={featured ? "price-card featured" : "price-card"}>
-      {featured && <span className="recommended">MOST PRACTICAL</span>}
+      {featured && <span className="recommended">RECOMMENDED</span>}
       <h2>{name}</h2>
       <p>{description}</p>
       <div className="plan-price">
@@ -3189,7 +3183,7 @@ function Plan({
       <div className="plan-value-note">
         <span>
           {name === "Buy once"
-            ? "1 model per purchase"
+            ? "Pay per model"
             : name === "Pro"
               ? "30 model credits included"
               : "150 model credits included"}
@@ -3221,7 +3215,7 @@ function Footer({ onInfo }: { onInfo: (page: InfoKey) => void }) {
     <footer className="archzz-footer">
       <div className="footer-main">
         <div>
-          <b>Company info</b>
+          <b>Company Info</b>
           <button onClick={() => onInfo("about")}>About ARCHZZ</button>
           <a
             className="ai-studio-link"
@@ -3328,7 +3322,6 @@ function Checkout({
       : 1.99;
   return (
     <div className="checkout-modal">
-      <p className="kicker">{paymentOnly ? "PAYMENT" : "ORDER REVIEW"}</p>
       <h2>{paymentOnly ? "Choose payment method" : "Review order"}</h2>
       {!paymentOnly && models.map((model, index) => (
           <div className="checkout-item" key={model.id}>
@@ -3376,7 +3369,7 @@ function Checkout({
       )}
       {allocation.cashAmount > 0 && (
         <>
-          <p className="payment-section-title">Select payment method</p>
+          {!paymentOnly && <p className="payment-section-title">Choose payment method</p>}
           <label className="payment-option">
             <input
               type="radio"
@@ -3414,8 +3407,8 @@ function Checkout({
       </button>
       <p className="legal-note">
         {allocation.cashAmount > 0
-          ? "By continuing, you agree to the Terms, Refund Policy and Standard License. Final amount is shown by your payment provider."
-          : "By confirming, you agree to the Terms and Standard License."}
+          ? "By continuing, you agree to the Terms of Use, Refund Policy, and Asset License Agreement."
+          : "By confirming, you agree to the Terms of Use and Asset License Agreement."}
       </p>
     </div>
   );
@@ -3470,7 +3463,6 @@ function SubscriptionCheckout({
           <span aria-hidden="true">←</span> {backLabel}
         </button>
       )}
-      <p className="kicker">SUBSCRIPTION CHECKOUT</p>
       <h2>{upgrading ? "Upgrade to Max" : `Start ${planName}`}</h2>
       <div className="subscription-summary">
         <span>{planName} plan</span>
@@ -3485,8 +3477,8 @@ function SubscriptionCheckout({
               ? `${unlockCount} model${unlockCount > 1 ? "s" : ""} unlocked after payment.`
               : `${unlockCount} model${unlockCount === 1 ? "" : "s"} · ${orderAllocation.planCredits} credit${orderAllocation.planCredits === 1 ? "" : "s"} used · ${Math.max(0, planBalance - orderAllocation.planCredits)} remaining.`
             : upgrading
-            ? "Used Pro credits carry over."
-            : "Unlocked models stay in My Assets."}
+            ? "Credits already used this billing period count toward your Max allowance."
+            : `${credits} credits available after payment.`}
         </small>
       </div>
       {unlockCount > 0 && allowBenefitSelection && (

@@ -17,8 +17,8 @@ export const defaultBenefitChoices: BenefitChoice[] = [
 ];
 
 export const legacyBenefitMeta = [
-  { key: "welcome" as const, balanceKey: "welcomeDownloads" as const, label: "Welcome credit", expires: "Sep 10, 2026" },
-  { key: "invitation" as const, balanceKey: "invitationDownloads" as const, label: "Invitation credit", expires: "Sep 30, 2026" },
+  { key: "welcome" as const, balanceKey: "welcomeDownloads" as const, label: "Welcome Coupon", expires: "Sep 10, 2026" },
+  { key: "invitation" as const, balanceKey: "invitationDownloads" as const, label: "Invitation Coupon", expires: "Sep 30, 2026" },
   { key: "vipCredits" as const, balanceKey: "vipCredits" as const, label: "Legacy VIP credits", expires: "Oct 07, 2026" },
   { key: "downloadCredits" as const, balanceKey: "downloadCredits" as const, label: "Download Credits", expires: "Dec 31, 2026" },
 ];
