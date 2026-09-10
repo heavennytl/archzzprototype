@@ -6,6 +6,7 @@ import type {
 } from "./types";
 
 export const MODEL_PRICE = 1.99;
+export const LEGACY_VIP_MODEL_PRICE = 1.69;
 export const CART_LIMIT = 30;
 
 export const defaultBenefitChoices: BenefitChoice[] = [

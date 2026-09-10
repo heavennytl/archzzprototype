@@ -7,6 +7,7 @@ import { Auth, CancelRenewal, FreeUnlockConfirm, ImageSearch, LicenseSummary, Mo
 
 import {
   CART_LIMIT,
+  LEGACY_VIP_MODEL_PRICE,
   MODEL_PRICE,
   allocateBenefits,
   allocationSources,
@@ -359,6 +360,7 @@ export default function Prototype() {
       showToast("You can choose Pro after your current Max plan ends.");
       return;
     }
+    setBenefitChoices((choices) => withPlanCredits(choices));
     setSubscriptionResume(resume);
     setPendingPlan(mode);
     if (user === "guest") {
@@ -579,6 +581,7 @@ export default function Prototype() {
           onFavorite={toggleFavorite}
           onCart={addToCart}
           onImageSearch={() => setModal("imageSearch")}
+          vipPricing={hasLegacyBenefits && legacyBenefits.vipActive}
         />
       )}
       {page === "home" && <ExtraCategories onSearchFor={searchFor} />}
@@ -597,6 +600,7 @@ export default function Prototype() {
           onFavorite={toggleFavorite}
           onCart={addToCart}
           onImageSearch={() => setModal("imageSearch")}
+          vipPricing={hasLegacyBenefits && legacyBenefits.vipActive}
         />
       )}
       {page === "product" && (
@@ -610,6 +614,7 @@ export default function Prototype() {
           creditBalance={(user === "max" ? 150 : 30) - creditUsed}
           freeClaimed={freeClaimed}
           hasLegacyBenefits={hasLegacyBenefits}
+          vipPricing={hasLegacyBenefits && legacyBenefits.vipActive}
           favorite={favorites.includes(selected.id)}
           inCart={cart.includes(selected.id)}
           onFavorite={() => toggleFavorite(selected.id)}
@@ -631,11 +636,13 @@ export default function Prototype() {
           owned={owned}
           onOpen={openModel}
           onClaim={primaryAction}
+          vipPricing={hasLegacyBenefits && legacyBenefits.vipActive}
         />
       )}
       {page === "pricing" && (
         <Pricing
           user={user}
+          vipPricing={hasLegacyBenefits && legacyBenefits.vipActive}
           onChoose={choosePlan}
           onBrowse={() => searchFor("All models")}
         />
@@ -1243,6 +1250,7 @@ function Home({
   onFavorite,
   onCart,
   onImageSearch,
+  vipPricing,
 }: {
   freeClaimed: number;
   query: string;
@@ -1258,6 +1266,7 @@ function Home({
   onFavorite: (id: number) => void;
   onCart: (id: number) => boolean;
   onImageSearch: () => void;
+  vipPricing: boolean;
 }) {
   return (
     <main>
@@ -1357,6 +1366,7 @@ function Home({
         onFavorite={onFavorite}
         onCart={onCart}
         onAll={() => onSearchFor("Popular")}
+        vipPricing={vipPricing}
       />
       <section className="free-strip">
         <div>
@@ -1422,6 +1432,7 @@ function SearchResults({
   onFavorite,
   onCart,
   onImageSearch,
+  vipPricing,
 }: {
   freeClaimed: number;
   query: string;
@@ -1436,6 +1447,7 @@ function SearchResults({
   onFavorite: (id: number) => void;
   onCart: (id: number) => boolean;
   onImageSearch: () => void;
+  vipPricing: boolean;
 }) {
   const [category, setCategory] = useState("All categories"),
     [keyword, setKeyword] = useState("All styles"),
@@ -1597,6 +1609,7 @@ function SearchResults({
                   inCart={cart.includes(model.id)}
                   onFavorite={onFavorite}
                   onCart={onCart}
+                  vipPricing={vipPricing}
                 />
               ))}
             </div>
@@ -1634,6 +1647,7 @@ function ProductDetail({
   creditBalance,
   freeClaimed,
   hasLegacyBenefits,
+  vipPricing,
   favorite,
   inCart,
   onFavorite,
@@ -1656,6 +1670,7 @@ function ProductDetail({
   creditBalance: number;
   freeClaimed: number;
   hasLegacyBenefits: boolean;
+  vipPricing: boolean;
   favorite: boolean;
   inCart: boolean;
   onFavorite: () => void;
@@ -1672,6 +1687,7 @@ function ProductDetail({
   const [activeImage, setActiveImage] = useState(0);
   const subscribed = user === "pro" || user === "max",
     available = model.available;
+  const cashPrice = vipPricing ? LEGACY_VIP_MODEL_PRICE : MODEL_PRICE;
   const freeAvailable = model.free && freeClaimed < 3;
   const showProCreditsExhausted =
     available &&
@@ -1702,12 +1718,12 @@ function ProductDetail({
       : freeAvailable
         ? "Free download"
         : model.free && (!subscribed || creditBalance <= 0)
-          ? "Unlock · $1.99"
+          ? `Unlock · $${cashPrice.toFixed(2)}`
         : subscribed && creditBalance > 0
           ? "Use 1 credit"
           : user === "pro"
             ? "Get this model"
-            : "Buy now · $1.99";
+            : `Buy now · $${cashPrice.toFixed(2)}`;
   const stats = {
     polygons: (128000 + model.id * 17420).toLocaleString(),
     textures: String(8 + model.id * 3),
@@ -1794,7 +1810,7 @@ function ProductDetail({
             <div>
               <span className="software-label">
                 {model.type}
-                {model.version ? ` ${model.version}` : ""}
+                {model.version ? ` ${model.version}+` : ""}
               </span>
               {model.renderer && (
                 <span className="software-label">{model.renderer}</span>
@@ -1824,10 +1840,10 @@ function ProductDetail({
                   Standard License <span aria-hidden="true">ⓘ</span>
                 </button>
               </div>
-              <strong>{model.free ? "Free" : "$1.99"}</strong>
+              <strong>{model.free ? "Free" : <CashPrice vip={vipPricing} />}</strong>
               {model.free && !freeAvailable && !owned && (
                 <small className="free-limit-note">
-                  Today’s free downloads are used · unlock another with a credit or $1.99
+                  Today’s free downloads are used · unlock with a credit or ${cashPrice.toFixed(2)}
                 </small>
               )}
             </div>
@@ -1864,13 +1880,6 @@ function ProductDetail({
           )}
           <section className="asset-details">
             <h2>Asset details</h2>
-            <div className="compatibility-row">
-              <span>Compatibility</span>
-              <strong>
-                {model.type}
-                {model.version ? ` ${model.version} or newer` : ""}
-              </strong>
-            </div>
             <div className="asset-grid">
               <Spec label="File size" value={model.size} />
               <Spec label="Upload date" value={stats.uploaded} />
@@ -1897,7 +1906,7 @@ function ProductDetail({
                 Upgrade to Max
               </button>
               <button className="buy-once-cta" onClick={onPrimary}>
-                Unlock · $1.99
+                Unlock · ${cashPrice.toFixed(2)}
               </button>
             </div>
           ) : (
@@ -1941,6 +1950,7 @@ function ProductDetail({
         onFavorite={onFavoriteModel}
         onCart={onCartModel}
         onFreeUnlock={onUnlockModel}
+        vipPricing={vipPricing}
       />
     </main>
   );
@@ -1952,12 +1962,14 @@ function FreePage({
   owned,
   onOpen,
   onClaim,
+  vipPricing,
 }: {
   user: UserMode;
   claimed: number;
   owned: number[];
   onOpen: (m: Model) => void;
   onClaim: (m: Model) => void;
+  vipPricing: boolean;
 }) {
   const [tab, setTab] = useState<ModelType>("SketchUp");
   const [ownershipFilter, setOwnershipFilter] = useState<
@@ -1996,7 +2008,7 @@ function FreePage({
           <h1>Choose any 3 models today.</h1>
           <p>
             {claimed >= 3
-              ? "Your 3 free downloads are used. Unlock more with plan credits or $1.99 each."
+              ? `Your 3 free downloads are used. Unlock more with plan credits or $${(vipPricing ? LEGACY_VIP_MODEL_PRICE : MODEL_PRICE).toFixed(2)} each.`
               : "Choose from the full SketchUp and 3ds Max collection. Downloaded models stay in My Assets."}
           </p>
         </div>
@@ -2046,7 +2058,7 @@ function FreePage({
           ))}
         </div>
       )}
-      <div className="free-grid">
+      {filteredModels.length ? <div className="free-grid">
         {filteredModels
           .slice(0, visibleCount)
           .map((model) => (
@@ -2074,32 +2086,41 @@ function FreePage({
                     {owned.includes(model.id)
                       ? "Download again"
                       : claimed >= 3
-                        ? "Unlock · $1.99"
+                        ? "Unlock"
                         : "Free download"}
                   </button>
                 </div>
               </div>
             </div>
           ))}
-      </div>
-      <AutoLoadMore
+      </div> : (
+        <div className="free-empty-state">
+          <Icon name="download" size={30} />
+          <h2>{ownershipFilter === "owned" ? "No owned free models yet" : "No models found"}</h2>
+          <p>{ownershipFilter === "owned" ? "Models you unlock from Today’s Free will appear here." : "Try another filter or software tab."}</p>
+          <button type="button" className="primary-cta" onClick={() => setOwnershipFilter("all")}>View all free models</button>
+        </div>
+      )}
+      {filteredModels.length > 0 && <AutoLoadMore
         hasMore={visibleCount < filteredModels.length}
         onLoad={() =>
           setVisibleCount((count) =>
             Math.min(count + 20, filteredModels.length),
           )
         }
-      />
+      />}
     </main>
   );
 }
 
 function Pricing({
   user,
+  vipPricing,
   onChoose,
   onBrowse,
 }: {
   user: UserMode;
+  vipPricing: boolean;
   onChoose: (m: "pro" | "max") => void;
   onBrowse: () => void;
 }) {
@@ -2116,7 +2137,9 @@ function Pricing({
       <div className="price-cards">
         <Plan
           name="Buy once"
-          price="$1.99"
+          price={vipPricing ? "$1.69" : "$1.99"}
+          originalPrice={vipPricing ? "$1.99" : undefined}
+          badge={vipPricing ? "VIP" : undefined}
           suffix="per model"
           description="For occasional, specific model needs."
           features={[
@@ -2199,10 +2222,45 @@ function Pricing({
 function SubscriptionOffer({
   onChoose,
   onLearnMore,
+  compact = false,
 }: {
   onChoose: (plan: "pro" | "max") => void;
   onLearnMore: () => void;
+  compact?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (compact) {
+    return (
+      <div className="subscription-offer subscription-offer-compact">
+        <button
+          type="button"
+          className="subscription-offer-compact-trigger"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+        >
+          <span><b>Need more models?</b><small>Plans start at $14.99/month</small></span>
+          <strong>{expanded ? "Hide plans" : "Compare plans"}</strong>
+        </button>
+        {expanded && (
+          <>
+            <div className="subscription-offer-grid">
+              <button type="button" className="subscription-offer-row" onClick={() => onChoose("pro")}>
+                <span><b>Pro</b><small>$14.99 / month</small></span>
+                <strong>≈ $0.50 / model</strong>
+              </button>
+              <button type="button" className="subscription-offer-row" onClick={() => onChoose("max")}>
+                <span><b>Max</b><small>$49.99 / month</small></span>
+                <strong>≈ $0.33 / model</strong>
+              </button>
+            </div>
+            <button type="button" className="subscription-offer-learn" onClick={onLearnMore}>View plan details</button>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="subscription-offer">
       <div className="subscription-offer-head">
@@ -2229,6 +2287,7 @@ function BenefitPicker({
   allocation,
   value,
   onChange,
+  compact = false,
 }: {
   user: UserMode;
   planBalance: number;
@@ -2237,20 +2296,51 @@ function BenefitPicker({
   allocation: BenefitAllocation;
   value: BenefitChoice[];
   onChange: (choices: BenefitChoice[]) => void;
+  compact?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const toggle = (choice: BenefitChoice) =>
     onChange(
       value.includes(choice)
         ? value.filter((item) => item !== choice)
         : [...value, choice],
     );
+  const availableCount = legacyBenefitMeta.filter(
+    (item) => hasLegacyBenefits && legacyBenefits[item.balanceKey] > 0,
+  ).length + ((user === "pro" || user === "max") && planBalance > 0 ? 1 : 0);
+  const appliedBenefits = [
+    ...legacyBenefitMeta
+      .filter((item) => allocation[item.key] > 0)
+      .map((item) => ({ label: item.label, count: allocation[item.key] })),
+    ...(allocation.planCredits > 0
+      ? [{ label: `${user === "max" ? "Max" : "Pro"} credits`, count: allocation.planCredits }]
+      : []),
+  ];
+  const appliedSummary = appliedBenefits.length
+    ? `${appliedBenefits[0].label} applied${appliedBenefits.length > 1 ? ` · +${appliedBenefits.length - 1} more` : ""}`
+    : "Not applied";
+  const availabilitySummary =
+    allocation.planCredits > 0 && appliedBenefits.length === 1
+      ? `${Math.max(0, planBalance - allocation.planCredits)} credits left`
+      : `${availableCount} benefit ${availableCount === 1 ? "type" : "types"} available`;
+
   return (
-    <div className="benefit-picker">
+    <div className={`benefit-picker${compact ? " compact" : ""}`}>
       <div className="benefit-picker-head">
-        <b>Use benefits</b>
-        {hasLegacyBenefits && <span>Expiring first</span>}
+        <b>Benefits</b>
+        {compact ? (
+          <button type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+            {expanded ? "Done" : "Change"}
+          </button>
+        ) : null}
       </div>
-      {hasLegacyBenefits && legacyBenefitMeta.map((item) => {
+      {compact && !expanded && (
+        <button type="button" className="benefit-summary" onClick={() => setExpanded(true)}>
+          <span><b>{appliedSummary}</b><small>{availabilitySummary}</small></span>
+          <strong>{allocation.cashModels ? `$${allocation.cashAmount.toFixed(2)} due` : "Covered"}</strong>
+        </button>
+      )}
+      {(!compact || expanded) && hasLegacyBenefits && legacyBenefitMeta.map((item) => {
         const balance = legacyBenefits[item.balanceKey];
         const used = allocation[item.key];
         if (balance <= 0) return null;
@@ -2266,7 +2356,7 @@ function BenefitPicker({
           </label>
         );
       })}
-      {(user === "pro" || user === "max") && planBalance > 0 && (
+      {(!compact || expanded) && (user === "pro" || user === "max") && planBalance > 0 && (
         <label className={value.includes("planCredits") ? "selected" : ""}>
           <input
             type="checkbox"
@@ -2277,10 +2367,14 @@ function BenefitPicker({
           <strong>{allocation.planCredits ? `${allocation.planCredits} applied · ` : ""}{Math.max(0, planBalance - allocation.planCredits)} left</strong>
         </label>
       )}
-      <div className="benefit-cash-row">
+      {(!compact || expanded) && <div className="benefit-cash-row">
         <span><b>Pay for the rest</b></span>
-        <strong>{allocation.cashModels ? `${allocation.cashModels} × $1.99` : "$1.99 / model"}</strong>
-      </div>
+        <strong className="benefit-cash-price">
+          {allocation.cashModels ? `${allocation.cashModels} × ` : ""}
+          <CashPrice vip={hasLegacyBenefits && legacyBenefits.vipActive} />
+          {!allocation.cashModels && " / model"}
+        </strong>
+      </div>}
     </div>
   );
 }
@@ -2320,7 +2414,8 @@ function CartPage({
   const selectedItems = items.filter((item) => selectedIds.includes(item.id));
   const visibleItems = cartView === "selected" ? selectedItems : items;
   const allSelected = items.length > 0 && selectedItems.length === items.length;
-  const cash = selectedItems.length * 1.99,
+  const cash = selectedItems.length * MODEL_PRICE,
+    vipPricing = hasLegacyBenefits && legacyBenefits.vipActive,
     allocation = allocateBenefits(
       selectedItems.length,
       user,
@@ -2415,7 +2510,7 @@ function CartPage({
                     {item.category} · {item.size} · Standard License
                   </small>
                 </div>
-                <strong>$1.99</strong>
+                <strong><CashPrice vip={vipPricing} /></strong>
                 <button className="remove" onClick={() => onRemove(item.id)}>
                   <Icon name="close" />
                 </button>
@@ -2426,7 +2521,7 @@ function CartPage({
             <h2>Order summary</h2>
             <div>
               <span>{selectedItems.length} models</span>
-              <b>${cash.toFixed(2)}</b>
+              <b><CashPrice vip={vipPricing} count={selectedItems.length} /></b>
             </div>
             {(hasLegacyBenefits || user === "pro" || user === "max") && (
               <BenefitPicker
@@ -3048,6 +3143,7 @@ function ModelSection({
   onCart,
   onFreeUnlock,
   onAll,
+  vipPricing,
 }: {
   freeClaimed: number;
   eyebrow: string;
@@ -3062,6 +3158,7 @@ function ModelSection({
   onCart: (id: number) => boolean;
   onFreeUnlock?: (model: Model) => void;
   onAll?: () => void;
+  vipPricing: boolean;
 }) {
   const paginated = title === "Related models",
     [visibleCount, setVisibleCount] = useState(paginated ? 20 : items.length),
@@ -3097,6 +3194,7 @@ function ModelSection({
             onFavorite={onFavorite}
             onCart={onCart}
             onFreeUnlock={onFreeUnlock}
+            vipPricing={vipPricing}
           />
         ))}
       </div>
@@ -3137,6 +3235,20 @@ function SectionHeading({
     </div>
   );
 }
+
+function CashPrice({ vip, count = 1 }: { vip: boolean; count?: number }) {
+  const originalPrice = MODEL_PRICE * count;
+  const finalPrice = LEGACY_VIP_MODEL_PRICE * count;
+  if (!vip) return <>${originalPrice.toFixed(2)}</>;
+  return (
+    <span className="vip-price">
+      <del>${originalPrice.toFixed(2)}</del>
+      <b>${finalPrice.toFixed(2)}</b>
+      <em>VIP</em>
+    </span>
+  );
+}
+
 function ModelCard({
   freeClaimed,
   model,
@@ -3147,6 +3259,7 @@ function ModelCard({
   onFavorite,
   onCart,
   onFreeUnlock,
+  vipPricing,
 }: {
   freeClaimed: number;
   model: Model;
@@ -3157,6 +3270,7 @@ function ModelCard({
   onFavorite: (id: number) => void;
   onCart: (id: number) => boolean;
   onFreeUnlock?: (model: Model) => void;
+  vipPricing: boolean;
 }) {
   const unavailable = !model.available,
     freeAvailable = model.free && freeClaimed < 3,
@@ -3211,7 +3325,7 @@ function ModelCard({
                 ? "Owned"
                 : model.free
                   ? "FREE"
-                  : "$1.99"}
+                  : <CashPrice vip={vipPricing} />}
           </strong>
           <div className="card-actions">
             <button
@@ -3369,6 +3483,8 @@ function Spec({ label, value }: { label: string; value: string }) {
 function Plan({
   name,
   price,
+  originalPrice,
+  badge,
   suffix,
   description,
   features,
@@ -3379,6 +3495,8 @@ function Plan({
 }: {
   name: string;
   price: string;
+  originalPrice?: string;
+  badge?: string;
   suffix: string;
   description: string;
   features: string[];
@@ -3393,10 +3511,14 @@ function Plan({
       <h2>{name}</h2>
       <p>{description}</p>
       <div className="plan-price">
-        <strong>
-          <span className="price-symbol">{price.slice(0, 1)}</span>
-          {price.slice(1)}
-        </strong>
+        <div className={originalPrice ? "plan-price-vip" : undefined}>
+          {originalPrice && <del>{originalPrice}</del>}
+          <strong>
+            <span className="price-symbol">{price.slice(0, 1)}</span>
+            {price.slice(1)}
+          </strong>
+          {badge && <em>{badge}</em>}
+        </div>
         <span>{suffix}</span>
       </div>
       <div className="plan-value-note">
@@ -3526,7 +3648,7 @@ function Checkout({
   onPricing: () => void;
   paymentOnly?: boolean;
 }) {
-  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "Antom">("PayPal");
+  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "Antom" | "DANA">("PayPal");
   const allocation = allocateBenefits(
       models.length,
       user,
@@ -3549,10 +3671,7 @@ function Checkout({
       user === "pro" &&
       allocation.cashModels > 0 &&
       allocationWithPlanCredits.cashModels > 0,
-    sources = allocationSources(allocation),
-    cashUnitPrice = allocation.cashModels
-      ? allocation.cashAmount / allocation.cashModels
-      : 1.99;
+    sources = allocationSources(allocation);
   return (
     <div className="checkout-modal">
       <h2>{paymentOnly ? "Choose payment method" : "Review order"}</h2>
@@ -3563,9 +3682,7 @@ function Checkout({
               <b>{model.title}</b>
               <small>{model.type} · Permanent access</small>
             </span>
-            <strong>
-              {sources[index] === "cash" ? `$${cashUnitPrice.toFixed(2)}` : "Covered"}
-            </strong>
+            <strong>{sources[index] === "cash" ? <CashPrice vip={allocation.vipDiscount > 0} /> : "Covered"}</strong>
           </div>
       ))}
       {!paymentOnly && (hasLegacyBenefits || user === "pro" || user === "max") && (
@@ -3577,18 +3694,15 @@ function Checkout({
           allocation={allocation}
           value={benefitChoices}
           onChange={onBenefitChoices}
+          compact
         />
       )}
       {!paymentOnly && allocation.cashModels > 0 && allocation.vipDiscount > 0 ? (
         <div className="checkout-lines">
-          <span><b>Subtotal</b><strong>${(models.length * 1.99).toFixed(2)}</strong></span>
+          <span><b>Subtotal</b><strong>${(models.length * MODEL_PRICE).toFixed(2)}</strong></span>
           <span><b>Legacy VIP discount</b><strong>−${allocation.vipDiscount.toFixed(2)}</strong></span>
         </div>
       ) : null}
-      <div className="checkout-total">
-        <span>Due today</span>
-        <strong>${allocation.cashAmount.toFixed(2)}</strong>
-      </div>
       {!paymentOnly && recommendMax && (
         <div className="checkout-upgrade-option">
           <span>RECOMMENDED</span>
@@ -3598,11 +3712,12 @@ function Checkout({
         </div>
       )}
       {!paymentOnly && user === "basic" && allocation.cashModels > 0 && (
-        <SubscriptionOffer onChoose={onChoosePlan} onLearnMore={onPricing} />
+        <SubscriptionOffer compact onChoose={onChoosePlan} onLearnMore={onPricing} />
       )}
       {allocation.cashAmount > 0 && (
         <>
           {!paymentOnly && <p className="payment-section-title">Choose payment method</p>}
+          <div className="payment-options-grid one-time-payment-grid">
           <label className="payment-option">
             <input
               type="radio"
@@ -3631,18 +3746,35 @@ function Checkout({
             />
             <b>Antom</b>
           </label>
+          <label className="payment-option">
+            <input
+              type="radio"
+              name="payment-channel"
+              checked={paymentMethod === "DANA"}
+              onChange={() => setPaymentMethod("DANA")}
+            />
+            <span className="dana-wordmark">DANA</span>
+            <b>DANA</b>
+          </label>
+          </div>
         </>
       )}
-      <button className="primary-cta" onClick={() => onPay(paymentMethod)}>
-        {allocation.cashAmount > 0
-          ? `Continue to ${paymentMethod}`
-          : "Confirm access"}
-      </button>
-      <p className="legal-note">
-        {allocation.cashAmount > 0
-          ? "By continuing, you agree to the Terms of Use, Refund Policy, and Asset License Agreement."
-          : "By confirming, you agree to the Terms of Use and Asset License Agreement."}
-      </p>
+      <div className="checkout-sticky-actions">
+        <div className="checkout-total">
+          <span>Due today</span>
+          <strong>${allocation.cashAmount.toFixed(2)}</strong>
+        </div>
+        <button className="primary-cta" onClick={() => onPay(paymentMethod)}>
+          {allocation.cashAmount > 0
+            ? `Continue to ${paymentMethod}`
+            : "Unlock model"}
+        </button>
+        <p className="legal-note">
+          {allocation.cashAmount > 0
+            ? "By continuing, you agree to the Terms and License."
+            : "By unlocking, you agree to the Terms and License."}
+        </p>
+      </div>
     </div>
   );
 }
@@ -3723,6 +3855,7 @@ function SubscriptionCheckout({
           allocation={orderAllocation}
           value={benefitChoices}
           onChange={onBenefitChoices}
+          compact
         />
       )}
       {orderAllocation.cashAmount > 0 && (
@@ -3731,11 +3864,8 @@ function SubscriptionCheckout({
           <span><b>Models not covered by credits</b><strong>${orderAllocation.cashAmount.toFixed(2)}</strong></span>
         </div>
       )}
-      <div className="checkout-total">
-        <span>Due today</span>
-        <strong>${dueToday.toFixed(2)}</strong>
-      </div>
       <p className="payment-section-title">Subscription payment method</p>
+      <div className="payment-options-grid subscription-payment-grid">
       <label className="payment-option">
         <input
           type="radio"
@@ -3767,16 +3897,20 @@ function SubscriptionCheckout({
         <b>DANA</b>
         <small>Processed by Antom</small>
       </label>
+      </div>
       <div className="renewal-note">
         Renews monthly at ${renewalPrice.toFixed(2)} until cancelled.
       </div>
-      <button className="primary-cta" onClick={() => onPay(paymentMethod)}>
-        Continue to {paymentMethod}
-      </button>
-      <p className="legal-note">
-        By continuing, you agree to recurring billing and the Terms.
-        Final amount is shown by your payment provider.
-      </p>
+      <div className="checkout-sticky-actions">
+        <div className="checkout-total">
+          <span>Due today</span>
+          <strong>${dueToday.toFixed(2)}</strong>
+        </div>
+        <button className="primary-cta" onClick={() => onPay(paymentMethod)}>
+          Continue to {paymentMethod}
+        </button>
+        <p className="legal-note">By continuing, you agree to recurring billing and the Terms.</p>
+      </div>
     </div>
   );
 }
