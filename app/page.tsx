@@ -51,6 +51,16 @@ function withPlanCredits(choices: BenefitChoice[]) {
     : [...choices, "planCredits" as const];
 }
 
+type PrototypeScenario =
+  | "guest"
+  | "new"
+  | "legacy"
+  | "pro"
+  | "proLegacy"
+  | "proRetrying"
+  | "max"
+  | "maxLegacy";
+
 export default function Prototype() {
   const [page, setPage] = useState<Page>("home"),
     [query, setQuery] = useState(""),
@@ -98,6 +108,7 @@ export default function Prototype() {
   ]);
   const [showHistoricalRecords, setShowHistoricalRecords] = useState(false);
   const [autoRenew, setAutoRenew] = useState(true);
+  const [renewalRetrying, setRenewalRetrying] = useState(false);
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
   const [resumingBillingId, setResumingBillingId] = useState<string | null>(null);
   const [pendingFreeUnlockId, setPendingFreeUnlockId] = useState<number | null>(null);
@@ -165,7 +176,12 @@ export default function Prototype() {
     setSelected(model);
     navigate("product");
   }
-  function addOrders(ids: number[], access: string | string[]) {
+  function addOrders(
+    ids: number[],
+    access: string | string[],
+    payment: OrderRecord["payment"] | OrderRecord["payment"][] = "—",
+    amount: string | string[] = "$0.00",
+  ) {
     const date = formatTransactionDate();
     const orderId = `AZ-${Date.now()}`;
     setOrders((items) => [
@@ -175,6 +191,8 @@ export default function Prototype() {
         modelId,
         date,
         access: Array.isArray(access) ? access[index] : access,
+        payment: Array.isArray(payment) ? payment[index] : payment,
+        amount: Array.isArray(amount) ? amount[index] : amount,
         status: "Paid" as const,
       })),
       ...items,
@@ -198,7 +216,7 @@ export default function Prototype() {
       v.includes(id) ? v.filter((x) => x !== id) : [...v, id],
     );
   }
-  function addToCart(id: number, confirmedFreeUnlock = false): boolean {
+  function addToCart(id: number): boolean {
     const model = catalog.find((item) => item.id === id);
     if (!model?.available || owned.includes(id)) {
       showToast(
@@ -208,15 +226,14 @@ export default function Prototype() {
       );
       return false;
     }
+    if (model.free) {
+      showToast("Free models are unlocked directly and can’t be added to cart.");
+      return false;
+    }
     if (user === "guest") {
       setSelected(model);
       setAuthIntent("cart");
       setModal("auth");
-      return false;
-    }
-    if (model.free && freeClaimed >= 3 && !confirmedFreeUnlock) {
-      setPendingFreeUnlockId(id);
-      setModal("freeUnlock");
       return false;
     }
     if (!cart.includes(id) && cart.length >= CART_LIMIT) {
@@ -247,6 +264,11 @@ export default function Prototype() {
       addOrders([model.id], "Free download");
       setModal("none");
       showToast("Download started. This model is now in My Assets.");
+      return;
+    }
+    if (model.free) {
+      setPendingFreeUnlockId(model.id);
+      setModal("freeUnlock");
       return;
     }
     setModal("checkout");
@@ -280,8 +302,8 @@ export default function Prototype() {
       setModal("none");
       showToast("Download started. This model is now in My Assets.");
     } else if (authIntent === "primary" && selected.free) {
-      setModal("none");
-      showToast("Today’s free downloads are used.");
+      setPendingFreeUnlockId(selected.id);
+      setModal("freeUnlock");
     } else if (authIntent === "primary") setModal("checkout");
     else if (authIntent === "plan" && pendingPlan)
       setModal("subscriptionCheckout");
@@ -295,9 +317,12 @@ export default function Prototype() {
     }
     setAuthIntent("none");
   }
-  function completePurchase(ids = [selected.id]) {
+  function completePurchase(
+    ids = [selected.id],
+    channel: OrderRecord["payment"] = "PayPal",
+  ) {
     const subscribed = user === "pro" || user === "max",
-      balance = subscribed ? (user === "max" ? 150 : 30) - creditUsed : 0,
+      balance = subscribed && !renewalRetrying ? (user === "max" ? 150 : 30) - creditUsed : 0,
       allocation = allocateBenefits(
         ids.length,
         user,
@@ -323,7 +348,7 @@ export default function Prototype() {
       ? allocation.cashAmount / allocation.cashModels
       : MODEL_PRICE;
     const access = allocationSources(allocation).map((source) =>
-      entitlementLabel(source, user, cashUnitPrice),
+      entitlementLabel(source, user),
     );
     if (resumingOrderId && ids.length === 1) {
       setOrders((items) =>
@@ -333,6 +358,8 @@ export default function Prototype() {
                 ...order,
                 date: formatTransactionDate(),
                 access: access[0],
+                payment: allocationSources(allocation)[0] === "cash" ? channel : "—",
+                amount: allocationSources(allocation)[0] === "cash" ? `$${cashUnitPrice.toFixed(2)}` : "$0.00",
                 status: "Paid",
               }
             : order,
@@ -340,7 +367,12 @@ export default function Prototype() {
       );
       setResumingOrderId(null);
     } else {
-      addOrders(ids, access);
+      addOrders(
+        ids,
+        access,
+        allocationSources(allocation).map((source) => source === "cash" ? channel : "—"),
+        allocationSources(allocation).map((source) => source === "cash" ? `$${cashUnitPrice.toFixed(2)}` : "$0.00"),
+      );
     }
     setSuccessCount(ids.length);
     setSuccessNotice({
@@ -351,10 +383,33 @@ export default function Prototype() {
     });
     setModal("success");
   }
+  function completePendingPurchase(order: OrderRecord) {
+    const orderModel = catalog.find((model) => model.id === order.modelId);
+    if (!orderModel) return;
+    setOwned((items) => Array.from(new Set([...items, order.modelId])));
+    setOrders((items) =>
+      items.map((item) =>
+        item.id === order.id
+          ? { ...item, date: formatTransactionDate(), status: "Paid" }
+          : item,
+      ),
+    );
+    setResumingOrderId(null);
+    setSuccessCount(1);
+    setSuccessNotice({
+      title: "Purchase complete",
+      message: `${orderModel.title} is ready in My Assets.`,
+    });
+    setModal("success");
+  }
   function choosePlan(
     mode: "pro" | "max",
     resume: "none" | "pdp" | "cart" = "none",
   ) {
+    if (renewalRetrying) {
+      showToast("Your renewal is still being processed.");
+      return;
+    }
     if (user === mode) return;
     if (user === "max" && mode === "pro") {
       showToast("You can choose Pro after your current Max plan ends.");
@@ -381,7 +436,7 @@ export default function Prototype() {
           : [];
     const planTotal = pendingPlan === "max" ? 150 : 30;
     const subscriptionBenefitChoices =
-      subscriptionResume === "cart"
+      subscriptionResume !== "none"
         ? withPlanCredits(benefitChoices)
         : benefitChoices;
     const resumeAllocation = allocateBenefits(
@@ -441,12 +496,9 @@ export default function Prototype() {
       );
       addOrders(
         resumeIds,
-        allocationSources(resumeAllocation).map((source) => {
-          const cashUnitPrice = resumeAllocation.cashModels
-            ? resumeAllocation.cashAmount / resumeAllocation.cashModels
-            : MODEL_PRICE;
-          return entitlementLabel(source, pendingPlan, cashUnitPrice);
-        }),
+        allocationSources(resumeAllocation).map((source) =>
+          entitlementLabel(source, pendingPlan),
+        ),
       );
       setSuccessCount(resumeIds.length);
       setSuccessNotice({
@@ -498,10 +550,43 @@ export default function Prototype() {
       header.classList.remove("show-scroll-search");
     };
   }, [page]);
-  const cartModels = models.filter((model) => cart.includes(model.id));
+  const cartModels = catalog.filter((model) => cart.includes(model.id));
   const selectedCartModels = cartModels.filter((model) =>
     cartSelection.includes(model.id),
   );
+  const planCreditBalance =
+    (user === "pro" || user === "max") && !renewalRetrying
+      ? Math.max(0, (user === "max" ? 150 : 30) - creditUsed)
+      : 0;
+  const hasLegacyCoverage =
+    hasLegacyBenefits &&
+    legacyBenefits.welcomeDownloads +
+      legacyBenefits.invitationDownloads +
+      legacyBenefits.vipCredits +
+      legacyBenefits.downloadCredits >
+      0;
+  const visibleOrders = showHistoricalRecords
+    ? hasLegacyBenefits
+      ? orders
+      : orders.filter(
+          (order) =>
+            !order.seeded ||
+            !/Legacy|Welcome Coupon|Invitation Coupon/.test(order.access),
+        )
+    : orders.filter((order) => !order.seeded);
+  const visibleBillingRecords = showHistoricalRecords
+    ? hasLegacyBenefits
+      ? billingRecords
+      : billingRecords.filter(
+          (record) => !record.seeded || record.kind === "Subscription",
+        )
+    : billingRecords.filter((record) => !record.seeded);
+  const resumingOrder = resumingOrderId
+    ? orders.find((order) => order.id === resumingOrderId) || null
+    : null;
+  const resumingBilling = resumingBillingId
+    ? billingRecords.find((record) => record.id === resumingBillingId) || null
+    : null;
   return (
     <div className="app-shell">
       <Header
@@ -529,6 +614,7 @@ export default function Prototype() {
           setCart([]);
           setCartSelection([]);
           setNotifications([]);
+          setRenewalRetrying(false);
           setSelectedNotification(null);
           setFreeClaimed(0);
           setBenefitChoices([...defaultBenefitChoices]);
@@ -611,9 +697,11 @@ export default function Prototype() {
           cart={cart}
           favorites={favorites}
           user={user}
-          creditBalance={(user === "max" ? 150 : 30) - creditUsed}
+          creditBalance={planCreditBalance}
           freeClaimed={freeClaimed}
           hasLegacyBenefits={hasLegacyBenefits}
+          hasLegacyCoverage={hasLegacyCoverage}
+          renewalRetrying={renewalRetrying}
           vipPricing={hasLegacyBenefits && legacyBenefits.vipActive}
           favorite={favorites.includes(selected.id)}
           inCart={cart.includes(selected.id)}
@@ -651,7 +739,7 @@ export default function Prototype() {
         <CartPage
           items={cartModels}
           user={user}
-          creditBalance={(user === "max" ? 150 : 30) - creditUsed}
+          creditBalance={planCreditBalance}
           legacyBenefits={legacyBenefits}
           hasLegacyBenefits={hasLegacyBenefits}
           benefitChoices={benefitChoices}
@@ -680,15 +768,16 @@ export default function Prototype() {
           tab={accountTab}
           onTab={setAccountTab}
           owned={catalog.filter((m) => owned.includes(m.id))}
-          favorites={models.filter((m) => favorites.includes(m.id))}
+          favorites={catalog.filter((m) => favorites.includes(m.id))}
           user={user}
           freeClaimed={freeClaimed}
           creditUsed={creditUsed}
-          orders={showHistoricalRecords ? orders : orders.filter((order) => !order.seeded)}
-          billingRecords={showHistoricalRecords ? billingRecords : billingRecords.filter((record) => !record.seeded)}
+          orders={visibleOrders}
+          billingRecords={visibleBillingRecords}
           legacyBenefits={legacyBenefits}
           hasLegacyBenefits={hasLegacyBenefits}
           autoRenew={autoRenew}
+          renewalRetrying={renewalRetrying}
           notifications={notifications}
           onOpen={openModel}
           onBrowse={() => navigate("search")}
@@ -758,24 +847,29 @@ export default function Prototype() {
                 setModal("none");
               }}
               onConfirm={() => {
-                const added = addToCart(pendingFreeUnlockId, true);
-                if (added) {
-                  setPendingFreeUnlockId(null);
-                  setModal("none");
-                }
+                const model = catalog.find((item) => item.id === pendingFreeUnlockId);
+                if (model) setSelected(model);
+                setPendingFreeUnlockId(null);
+                setModal("checkout");
               }}
             />
           )}{" "}
           {modal === "checkout" && (
-            <Checkout
+            resumingOrder ? (
+              <PendingPaymentCheckout
+                model={selected}
+                order={resumingOrder}
+                onPay={() => completePendingPurchase(resumingOrder)}
+              />
+            ) : <Checkout
               models={[selected]}
               user={user}
-              planBalance={(user === "max" ? 150 : 30) - creditUsed}
+              planBalance={planCreditBalance}
               legacyBenefits={legacyBenefits}
               hasLegacyBenefits={hasLegacyBenefits}
               benefitChoices={benefitChoices}
               onBenefitChoices={setBenefitChoices}
-              onPay={() => completePurchase()}
+              onPay={(channel) => completePurchase(undefined, channel)}
               onUpgrade={() => choosePlan("max", "pdp")}
               onChoosePlan={(plan) => choosePlan(plan, "pdp")}
               onPricing={() => {
@@ -788,13 +882,13 @@ export default function Prototype() {
             <Checkout
               models={selectedCartModels}
               user={user}
-              planBalance={(user === "max" ? 150 : 30) - creditUsed}
+              planBalance={planCreditBalance}
               legacyBenefits={legacyBenefits}
               hasLegacyBenefits={hasLegacyBenefits}
               benefitChoices={benefitChoices}
               onBenefitChoices={setBenefitChoices}
-              onPay={() =>
-                completePurchase(selectedCartModels.map((model) => model.id))
+              onPay={(channel) =>
+                completePurchase(selectedCartModels.map((model) => model.id), channel)
               }
               onUpgrade={() => choosePlan("max", "cart")}
               onChoosePlan={(plan) => choosePlan(plan, "cart")}
@@ -820,7 +914,7 @@ export default function Prototype() {
               legacyBenefits={legacyBenefits}
               hasLegacyBenefits={hasLegacyBenefits}
               benefitChoices={
-                subscriptionResume === "cart"
+                subscriptionResume !== "none"
                   ? withPlanCredits(benefitChoices)
                   : benefitChoices
               }
@@ -832,6 +926,7 @@ export default function Prototype() {
                 setSubscriptionResume("none");
               } : undefined}
               backLabel={subscriptionResume === "cart" ? "Back to cart" : "Back to one-time purchase"}
+              lockedPaymentMethod={resumingBilling?.channel}
               onPay={completeSubscription}
             />
           )}{" "}
@@ -905,6 +1000,7 @@ export default function Prototype() {
       <PrototypeStateControl
         user={user}
         hasLegacyBenefits={hasLegacyBenefits}
+        renewalRetrying={renewalRetrying}
         onChange={(state) => {
           setOrders((items) => items.filter((order) => order.seeded));
           setBillingRecords((items) => items.filter((record) => record.seeded));
@@ -917,6 +1013,7 @@ export default function Prototype() {
           setFreeClaimed(0);
           setBenefitChoices([...defaultBenefitChoices]);
           setNotifications([]);
+          setRenewalRetrying(false);
           setSelectedNotification(null);
           setLegacyBenefits({
             welcomeDownloads: 3,
@@ -949,19 +1046,32 @@ export default function Prototype() {
             setShowHistoricalRecords(true);
             setCreditUsed(30);
             setOwned([1]);
+          } else if (state === "proLegacy") {
+            setUser("pro");
+            setHasLegacyBenefits(true);
+            setShowHistoricalRecords(true);
+            setCreditUsed(30);
+            setOwned([1]);
+          } else if (state === "proRetrying") {
+            setUser("pro");
+            setHasLegacyBenefits(false);
+            setShowHistoricalRecords(true);
+            setCreditUsed(0);
+            setOwned([1]);
+            setRenewalRetrying(true);
             setNotifications(initialNotifications.map((item) => ({ ...item })));
-          } else {
+          } else if (state === "max") {
             setUser("max");
             setHasLegacyBenefits(false);
             setShowHistoricalRecords(true);
             setCreditUsed(148);
             setOwned([1]);
-            setNotifications(
-              initialNotifications.map((item) => ({
-                ...item,
-                message: item.message.replace("Pro", "Max").replace("30 credits", "150 credits"),
-              })),
-            );
+          } else {
+            setUser("max");
+            setHasLegacyBenefits(true);
+            setShowHistoricalRecords(true);
+            setCreditUsed(148);
+            setOwned([1]);
           }
           setAutoRenew(true);
           setModal("none");
@@ -974,15 +1084,23 @@ export default function Prototype() {
 function PrototypeStateControl({
   user,
   hasLegacyBenefits,
+  renewalRetrying,
   onChange,
 }: {
   user: UserMode;
   hasLegacyBenefits: boolean;
-  onChange: (state: "guest" | "new" | "legacy" | "pro" | "max") => void;
+  renewalRetrying: boolean;
+  onChange: (state: PrototypeScenario) => void;
 }) {
   const value =
     user === "guest"
       ? "guest"
+      : renewalRetrying
+        ? "proRetrying"
+      : hasLegacyBenefits && user === "pro"
+        ? "proLegacy"
+      : hasLegacyBenefits && user === "max"
+        ? "maxLegacy"
       : hasLegacyBenefits
         ? "legacy"
         : user === "basic"
@@ -991,12 +1109,15 @@ function PrototypeStateControl({
   return (
     <aside className="demo-control" aria-label="Prototype state">
       <span><i /> Prototype state</span>
-      <select value={value} onChange={(event) => onChange(event.target.value as "guest" | "new" | "legacy" | "pro" | "max")}>
+      <select value={value} onChange={(event) => onChange(event.target.value as PrototypeScenario)}>
         <option value="guest">Guest</option>
         <option value="new">New registered user</option>
         <option value="legacy">Legacy user</option>
-        <option value="pro">Pro · 0/30 remaining</option>
-        <option value="max">Max · 2/150 remaining</option>
+        <option value="pro">Pro · 30/30 used (0 left)</option>
+        <option value="proLegacy">Pro + Legacy · 30/30 used</option>
+        <option value="proRetrying">Pro · payment retrying</option>
+        <option value="max">Max · 148/150 used (2 left)</option>
+        <option value="maxLegacy">Max + Legacy · 148/150 used</option>
       </select>
     </aside>
   );
@@ -1647,6 +1768,8 @@ function ProductDetail({
   creditBalance,
   freeClaimed,
   hasLegacyBenefits,
+  hasLegacyCoverage,
+  renewalRetrying,
   vipPricing,
   favorite,
   inCart,
@@ -1670,6 +1793,8 @@ function ProductDetail({
   creditBalance: number;
   freeClaimed: number;
   hasLegacyBenefits: boolean;
+  hasLegacyCoverage: boolean;
+  renewalRetrying: boolean;
   vipPricing: boolean;
   favorite: boolean;
   inCart: boolean;
@@ -1693,6 +1818,8 @@ function ProductDetail({
     available &&
     user === "pro" &&
     creditBalance <= 0 &&
+    !hasLegacyCoverage &&
+    !renewalRetrying &&
     !owned &&
     !freeAvailable;
   const sameCategory = catalog.filter(
@@ -1717,8 +1844,10 @@ function ProductDetail({
       ? "Download again"
       : freeAvailable
         ? "Free download"
-        : model.free && (!subscribed || creditBalance <= 0)
-          ? `Unlock · $${cashPrice.toFixed(2)}`
+        : model.free
+          ? "Unlock"
+        : renewalRetrying
+          ? `Buy once · $${cashPrice.toFixed(2)}`
         : subscribed && creditBalance > 0
           ? "Use 1 credit"
           : user === "pro"
@@ -1848,14 +1977,20 @@ function ProductDetail({
               )}
             </div>
             {!freeAvailable && <div className="membership-decision">
-              {subscribed ? (
+              {subscribed && !renewalRetrying ? (
                 <>
                   <span>YOUR PLAN</span>
-                  <strong>{creditBalance > 0 ? "1 credit" : "No credits left"}</strong>
+                  <strong>{user === "max" ? "Max plan" : "Pro plan"}</strong>
                   <small>
                     {creditBalance} {user === "max" ? "Max" : "Pro"} credits
                     left
                   </small>
+                </>
+              ) : renewalRetrying ? (
+                <>
+                  <span>PLAN STATUS</span>
+                  <strong>Payment retrying</strong>
+                  <small>Credits are temporarily unavailable</small>
                 </>
               ) : (
                 <>
@@ -1901,7 +2036,6 @@ function ProductDetail({
           )}
           {showProCreditsExhausted ? (
             <div className="pdp-credit-exhausted">
-              <p>Your Pro credits are used up.</p>
               <button className="primary-cta" onClick={onUpgrade}>
                 Upgrade to Max
               </button>
@@ -1918,7 +2052,7 @@ function ProductDetail({
               >
                 {primaryLabel}
               </button>
-              {available && !freeAvailable && !owned && (
+              {available && !model.free && !owned && (
                 <button
                   className={`cart-cta pdp-cart-icon-cta ${inCart ? "added" : ""}`}
                   onClick={onCart}
@@ -2299,11 +2433,11 @@ function BenefitPicker({
   compact?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const toggle = (choice: BenefitChoice) =>
+  const choose = (choice: BenefitChoice, applied: boolean) =>
     onChange(
-      value.includes(choice)
+      applied
         ? value.filter((item) => item !== choice)
-        : [...value, choice],
+        : [choice, ...value.filter((item) => item !== choice)],
     );
   const availableCount = legacyBenefitMeta.filter(
     (item) => hasLegacyBenefits && legacyBenefits[item.balanceKey] > 0,
@@ -2345,26 +2479,26 @@ function BenefitPicker({
         const used = allocation[item.key];
         if (balance <= 0) return null;
         return (
-          <label key={item.key} className={value.includes(item.key) ? "selected" : ""}>
+          <label key={item.key} className={used > 0 ? "selected" : ""}>
             <input
               type="checkbox"
-              checked={value.includes(item.key)}
-              onChange={() => toggle(item.key)}
+              checked={used > 0}
+              onChange={() => choose(item.key, used > 0)}
             />
             <span><b>{item.label}</b><small>Expires {item.expires}</small></span>
-            <strong>{used ? `${used} applied · ` : ""}{Math.max(0, balance - used)} left</strong>
+            <strong>{used ? `${used} applied · ${Math.max(0, balance - used)} left` : `${balance} available`}</strong>
           </label>
         );
       })}
       {(!compact || expanded) && (user === "pro" || user === "max") && planBalance > 0 && (
-        <label className={value.includes("planCredits") ? "selected" : ""}>
+        <label className={allocation.planCredits > 0 ? "selected" : ""}>
           <input
             type="checkbox"
-            checked={value.includes("planCredits")}
-            onChange={() => toggle("planCredits")}
+            checked={allocation.planCredits > 0}
+            onChange={() => choose("planCredits", allocation.planCredits > 0)}
           />
           <span><b>{user === "max" ? "Max" : "Pro"} credits</b><small>Cycle ends Oct 07, 2026</small></span>
-          <strong>{allocation.planCredits ? `${allocation.planCredits} applied · ` : ""}{Math.max(0, planBalance - allocation.planCredits)} left</strong>
+          <strong>{allocation.planCredits ? `${allocation.planCredits} applied · ${Math.max(0, planBalance - allocation.planCredits)} left` : `${planBalance} available`}</strong>
         </label>
       )}
       {(!compact || expanded) && <div className="benefit-cash-row">
@@ -2594,6 +2728,7 @@ function Assets({
   legacyBenefits,
   hasLegacyBenefits,
   autoRenew,
+  renewalRetrying,
   notifications,
   onOpen,
   onBrowse,
@@ -2618,6 +2753,7 @@ function Assets({
   legacyBenefits: LegacyBenefits;
   hasLegacyBenefits: boolean;
   autoRenew: boolean;
+  renewalRetrying: boolean;
   notifications: NotificationRecord[];
   onOpen: (m: Model) => void;
   onBrowse: () => void;
@@ -2683,7 +2819,7 @@ function Assets({
             legacyBenefits={legacyBenefits}
             hasLegacyBenefits={hasLegacyBenefits}
             autoRenew={autoRenew}
-            renewalRetrying={user === "pro" && creditUsed >= 30}
+            renewalRetrying={renewalRetrying}
             onPricing={onPricing}
             onToggleRenew={onToggleRenew}
           />
@@ -2969,7 +3105,7 @@ function OrderHistory({
             : "Subscription and legacy benefit payments"}
         </small>
       </div>
-      {view === "models" && orders.map((order) => {
+      {view === "models" && <div className="order-list-scroll">{orders.map((order) => {
         const model = models.find((item) => item.id === order.modelId);
         if (!model) return null;
         const parentOrderId = order.orderId || order.id;
@@ -2983,8 +3119,7 @@ function OrderHistory({
               <img src={model.image} alt="" />
               <span>
                 <small>
-                  {model.type.charAt(0).toUpperCase() +
-                    model.type.slice(1).toLowerCase()}
+                  {model.type}
                   {model.renderer ? ` · ${model.renderer}` : ""}
                 </small>
                 <b>{model.title}</b>
@@ -3002,8 +3137,16 @@ function OrderHistory({
               <b>{order.date}</b>
             </div>
             <div>
-              <span>Access</span>
+              <span>Benefit</span>
               <b>{order.access}</b>
+            </div>
+            <div>
+              <span>Payment</span>
+              <b>{order.payment || "—"}</b>
+            </div>
+            <div>
+              <span>Amount</span>
+              <b>{order.amount || "$0.00"}</b>
             </div>
             <div className="order-state">
               <strong
@@ -3018,9 +3161,9 @@ function OrderHistory({
             </div>
           </article>
         );
-      })}
+      })}</div>}
       {view === "billing" &&
-        billingRecords.map((record) => {
+        <div className="order-list-scroll">{billingRecords.map((record) => {
           const pendingPlan = record.title.toLowerCase().includes("max")
             ? "max"
             : "pro";
@@ -3065,7 +3208,7 @@ function OrderHistory({
               )}
             </div>
           </article>;
-        })}
+        })}</div>}
     </div>
   );
 }
@@ -3275,7 +3418,7 @@ function ModelCard({
   const unavailable = !model.available,
     freeAvailable = model.free && freeClaimed < 3,
     freeLocked = model.free && !freeAvailable,
-    purchasable = !owned && !freeAvailable && !unavailable,
+    purchasable = !model.free && !owned && !unavailable,
     freeAction = !owned && freeAvailable && !unavailable,
     saves = 180 + model.id * 39 + (favorite ? 1 : 0);
   return (
@@ -3345,10 +3488,11 @@ function ModelCard({
                       : ""
               }
               onClick={() => {
-                if (purchasable) {
+                if (model.free && !owned && !unavailable) {
+                  if (onFreeUnlock) onFreeUnlock(model);
+                  else onOpen(model);
+                } else if (purchasable) {
                   if (!inCart) onCart(model.id);
-                } else if (freeAction && onFreeUnlock) {
-                  onFreeUnlock(model);
                 } else onOpen(model);
               }}
               disabled={inCart}
@@ -3621,6 +3765,49 @@ function InfoPage({
     </main>
   );
 }
+
+function PendingPaymentCheckout({
+  model,
+  order,
+  onPay,
+}: {
+  model: Model;
+  order: OrderRecord;
+  onPay: () => void;
+}) {
+  const channel = order.payment && order.payment !== "—" ? order.payment : "PayPal";
+  return (
+    <div className="checkout-modal">
+      <h2>Continue payment</h2>
+      <div className="checkout-item">
+        <img src={model.image} alt="" />
+        <span>
+          <b>{model.title}</b>
+          <small>{model.type} · Permanent access</small>
+        </span>
+        <strong>{order.amount || "$1.99"}</strong>
+      </div>
+      <p className="payment-section-title">Payment method</p>
+      <div className="payment-options-grid one-time-payment-grid locked-payment-grid">
+        <div className="payment-option selected-payment-option">
+          {channel === "PayPal" && <img className="payment-logo paypal-logo" src="/paypal-logo.png" alt="PayPal" />}
+          {channel === "Antom" && <img className="payment-logo antom-logo" src="/antom-logo.png" alt="Antom" />}
+          {channel === "DANA" && <span className="dana-wordmark">DANA</span>}
+          <b>{channel}</b>
+        </div>
+      </div>
+      <div className="checkout-sticky-actions">
+        <div className="checkout-total">
+          <span>Due today</span>
+          <strong>{order.amount || "$1.99"}</strong>
+        </div>
+        <button className="primary-cta" onClick={onPay}>Continue to {channel}</button>
+        <p className="legal-note">Payment method is fixed for this pending order.</p>
+      </div>
+    </div>
+  );
+}
+
 function Checkout({
   models,
   user,
@@ -3791,6 +3978,7 @@ function SubscriptionCheckout({
   allowBenefitSelection = true,
   onBack,
   backLabel = "Back to one-time purchase",
+  lockedPaymentMethod,
   onPay,
 }: {
   plan: "pro" | "max";
@@ -3804,9 +3992,10 @@ function SubscriptionCheckout({
   allowBenefitSelection?: boolean;
   onBack?: () => void;
   backLabel?: string;
+  lockedPaymentMethod?: BillingRecord["channel"];
   onPay: (channel: "PayPal" | "Antom" | "DANA") => void;
 }) {
-  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "Antom" | "DANA">("PayPal");
+  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "Antom" | "DANA">(lockedPaymentMethod || "PayPal");
   const planName = plan === "max" ? "Max" : "Pro";
   const price = upgrading ? 35 : plan === "max" ? 49.99 : 14.99;
   const renewalPrice = plan === "max" ? 49.99 : 14.99;
@@ -3866,37 +4055,37 @@ function SubscriptionCheckout({
       )}
       <p className="payment-section-title">Subscription payment method</p>
       <div className="payment-options-grid subscription-payment-grid">
-      <label className="payment-option">
+      {(!lockedPaymentMethod || lockedPaymentMethod === "PayPal") && <label className="payment-option">
         <input
           type="radio"
           name="subscription-payment"
           checked={paymentMethod === "PayPal"}
-          onChange={() => setPaymentMethod("PayPal")}
+          onChange={() => !lockedPaymentMethod && setPaymentMethod("PayPal")}
         />
         <img className="payment-logo paypal-logo" src="/paypal-logo.png" alt="PayPal" />
         <b>PayPal</b>
-      </label>
-      <label className="payment-option">
+      </label>}
+      {(!lockedPaymentMethod || lockedPaymentMethod === "Antom") && <label className="payment-option">
         <input
           type="radio"
           name="subscription-payment"
           checked={paymentMethod === "Antom"}
-          onChange={() => setPaymentMethod("Antom")}
+          onChange={() => !lockedPaymentMethod && setPaymentMethod("Antom")}
         />
         <img className="payment-logo antom-logo" src="/antom-logo.png" alt="Antom" />
         <b>Antom</b>
-      </label>
-      <label className="payment-option">
+      </label>}
+      {(!lockedPaymentMethod || lockedPaymentMethod === "DANA") && <label className="payment-option">
         <input
           type="radio"
           name="subscription-payment"
           checked={paymentMethod === "DANA"}
-          onChange={() => setPaymentMethod("DANA")}
+          onChange={() => !lockedPaymentMethod && setPaymentMethod("DANA")}
         />
         <span className="dana-wordmark">DANA</span>
         <b>DANA</b>
         <small>Processed by Antom</small>
-      </label>
+      </label>}
       </div>
       <div className="renewal-note">
         Renews monthly at ${renewalPrice.toFixed(2)} until cancelled.

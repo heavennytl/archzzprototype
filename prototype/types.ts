@@ -67,6 +67,8 @@ export type OrderRecord = {
   modelId: number;
   date: string;
   access: string;
+  payment?: "PayPal" | "Antom" | "DANA" | "—";
+  amount?: string;
   seeded?: boolean;
   status?: TransactionStatus;
 };

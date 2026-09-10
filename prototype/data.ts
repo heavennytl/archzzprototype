@@ -32,7 +32,7 @@ export const todayFreeModels: Model[] = Array.from({ length: 1000 }, (_, index) 
 });
 
 // Keep the 1,000-item Free Models demo pool separate from general-search fixtures.
-export const catalog = [...models, ...todayFreeModels.slice(0, 40)];
+export const catalog = [...models, ...todayFreeModels];
 
 export const infoPages: Record<InfoKey, InfoPageContent> = {
   about: { eyebrow: "COMPANY INFO", title: "About ARCHZZ", body: ["ARCHZZ provides production-ready 3D assets for architecture, interiors and landscape design, with clear compatibility and file details."] },

@@ -39,13 +39,13 @@ export const initialNotifications: NotificationRecord[] = [
 ];
 
 export const initialOrders: OrderRecord[] = [
-  { id: "AZ-REFUND-2408", modelId: 2, date: "Aug 18, 2026", access: "Access revoked", status: "Refunded", seeded: true },
-  { id: "AZ-REFUNDING-2410", modelId: 1, date: "Aug 20, 2026", access: "Access remains until refund completes", status: "Refund processing", seeded: true },
-  { id: "AZ-PENDING-2412", modelId: 3, date: "Aug 22, 2026", access: "Payment due · 11:42 left", status: "Pending", seeded: true },
-  { id: "AZ-FAILED-2414", modelId: 4, date: "Aug 24, 2026", access: "Not granted", status: "Failed", seeded: true },
-  { id: "AZ-PROCESSING-2415", modelId: 5, date: "Aug 25, 2026", access: "Granting access", status: "Processing", seeded: true },
-  { id: "AZ-EXPIRED-2416", modelId: 6, date: "Aug 26, 2026", access: "Not granted", status: "Expired", seeded: true },
-  { id: "AZ-CREDIT-REFUND-2417", modelId: 7, date: "Aug 27, 2026", access: "Access revoked · Credit not returned", status: "Refunded", seeded: true },
+  { id: "AZ-REFUND-2408", modelId: 2, date: "Aug 18, 2026", access: "Buy once", payment: "PayPal", amount: "$1.99", status: "Refunded", seeded: true },
+  { id: "AZ-REFUNDING-2410", modelId: 1, date: "Aug 20, 2026", access: "Welcome Coupon", payment: "—", amount: "$0.00", status: "Refund processing", seeded: true },
+  { id: "AZ-PENDING-2412", modelId: 3, date: "Aug 22, 2026", access: "Buy once", payment: "Antom", amount: "$1.99", status: "Pending", seeded: true },
+  { id: "AZ-FAILED-2414", modelId: 4, date: "Aug 24, 2026", access: "Buy once", payment: "DANA", amount: "$1.99", status: "Failed", seeded: true },
+  { id: "AZ-PROCESSING-2415", modelId: 5, date: "Aug 25, 2026", access: "Legacy VIP Credits", payment: "—", amount: "$0.00", status: "Processing", seeded: true },
+  { id: "AZ-EXPIRED-2416", modelId: 6, date: "Aug 26, 2026", access: "Buy once", payment: "PayPal", amount: "$1.99", status: "Expired", seeded: true },
+  { id: "AZ-CREDIT-REFUND-2417", modelId: 7, date: "Aug 27, 2026", access: "Legacy Download Credits", payment: "—", amount: "$0.00", status: "Refunded", seeded: true },
 ];
 
 export const initialBillingRecords: BillingRecord[] = [

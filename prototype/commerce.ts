@@ -86,7 +86,6 @@ export function allocationSources(
 export function entitlementLabel(
   source: Exclude<BenefitAllocation["source"], "mixed">,
   user: UserMode,
-  cashUnitPrice = MODEL_PRICE,
 ) {
   return source === "welcome"
     ? "Welcome Coupon"
@@ -98,7 +97,7 @@ export function entitlementLabel(
           ? "Legacy Download Credit"
           : source === "planCredits"
             ? `${user === "max" ? "Max" : "Pro"} credit`
-            : `$${cashUnitPrice.toFixed(2)}`;
+            : "Buy once";
 }
 
 export function formatTransactionDate(date = new Date()) {

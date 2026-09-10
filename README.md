@@ -19,11 +19,13 @@ npm run dev
 - SketchUp Models、3ds Max Models、Today’s Free 和 Pricing
 - 搜索结果、筛选、排序和固定推荐表达
 - 商品卡、商品详情、专业参数和 Quality checked 状态
-- 每日 20 个 SketchUp＋20 个 3ds Max 免费模型，跨类型选择 3 个
+- Today’s Free 展示完整免费池（演示口径：500 个 SketchUp＋500 个 3ds Max），每日随机排序，跨类型共可免费解锁 3 个
+- Free 模型不进入 Cart：额度内直接解锁，额度用完后确认并进入单模型 Checkout
 - Buy once、Pro、Max、Cart 和模拟 Checkout
 - 登录后恢复收藏、加购、领取和购买动作
 - My Assets、Favorites、Plan & Unlocks
-- Guest、Basic、Pro 演示状态和响应式布局
+- Guest、新用户、Legacy、Pro、Max、Pro/Max + Legacy 及续费处理中的独立演示状态
+- Pending 订单继续支付时锁定原支付渠道，不重新选择权益或产生新订单
 
 ## 设计参考素材
 

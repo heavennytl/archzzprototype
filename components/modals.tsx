@@ -71,16 +71,16 @@ export function FreeUnlockConfirm({
   return (
     <div className="confirm-modal">
       <p className="kicker">DAILY FREE LIMIT</p>
-      <h2>Add this model to cart?</h2>
+      <h2>Continue unlocking this model?</h2>
       <p>
-        Your 3 free downloads are used. Pay with available benefits, credits,
-        or $1.99.
+        Today’s 3 free downloads are used. Continue with available benefits,
+        credits, or $1.99.
       </p>
       <button className="primary-cta" onClick={onConfirm}>
-        Add to cart
+        Continue
       </button>
       <button className="text-button" onClick={onCancel}>
-        Not now
+        Cancel
       </button>
     </div>
   );
