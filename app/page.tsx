@@ -2422,6 +2422,7 @@ function BenefitPicker({
   value,
   onChange,
   compact = false,
+  singleSelection = false,
 }: {
   user: UserMode;
   planBalance: number;
@@ -2431,11 +2432,16 @@ function BenefitPicker({
   value: BenefitChoice[];
   onChange: (choices: BenefitChoice[]) => void;
   compact?: boolean;
+  singleSelection?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const choose = (choice: BenefitChoice, applied: boolean) =>
     onChange(
-      applied
+      singleSelection
+        ? applied
+          ? []
+          : [choice]
+        : applied
         ? value.filter((item) => item !== choice)
         : [choice, ...value.filter((item) => item !== choice)],
     );
@@ -2451,12 +2457,18 @@ function BenefitPicker({
       : []),
   ];
   const appliedSummary = appliedBenefits.length
-    ? `${appliedBenefits[0].label} applied${appliedBenefits.length > 1 ? ` · +${appliedBenefits.length - 1} more` : ""}`
+    ? `${appliedBenefits[0].label}${appliedBenefits.length > 1 ? ` · +${appliedBenefits.length - 1} more` : ""}`
     : "Not applied";
+  const appliedCount = appliedBenefits.reduce(
+    (total, item) => total + item.count,
+    0,
+  );
   const availabilitySummary =
     allocation.planCredits > 0 && appliedBenefits.length === 1
       ? `${Math.max(0, planBalance - allocation.planCredits)} credits left`
-      : `${availableCount} benefit ${availableCount === 1 ? "type" : "types"} available`;
+      : appliedBenefits.length
+        ? `${Math.max(0, availableCount - appliedBenefits.length)} other benefit ${Math.max(0, availableCount - appliedBenefits.length) === 1 ? "type" : "types"} available`
+        : `${availableCount} benefit ${availableCount === 1 ? "type" : "types"} available`;
 
   return (
     <div className={`benefit-picker${compact ? " compact" : ""}`}>
@@ -2470,8 +2482,11 @@ function BenefitPicker({
       </div>
       {compact && !expanded && (
         <button type="button" className="benefit-summary" onClick={() => setExpanded(true)}>
+          <i className={appliedCount ? "benefit-summary-check selected" : "benefit-summary-check"} aria-hidden="true">
+            {appliedCount ? "✓" : ""}
+          </i>
           <span><b>{appliedSummary}</b><small>{availabilitySummary}</small></span>
-          <strong>{allocation.cashModels ? `$${allocation.cashAmount.toFixed(2)} due` : "Covered"}</strong>
+          <strong>{appliedCount ? `${appliedCount} benefit${appliedCount === 1 ? "" : "s"} applied` : `$${allocation.cashAmount.toFixed(2)} due`}</strong>
         </button>
       )}
       {(!compact || expanded) && hasLegacyBenefits && legacyBenefitMeta.map((item) => {
@@ -3392,6 +3407,17 @@ function CashPrice({ vip, count = 1 }: { vip: boolean; count?: number }) {
   );
 }
 
+function AppliedPrice({ vip }: { vip: boolean }) {
+  const price = vip ? LEGACY_VIP_MODEL_PRICE : MODEL_PRICE;
+  return (
+    <span className="applied-price">
+      <del>${price.toFixed(2)}</del>
+      <b>$0.00</b>
+      {vip && <em>VIP</em>}
+    </span>
+  );
+}
+
 function ModelCard({
   freeClaimed,
   model,
@@ -3869,7 +3895,13 @@ function Checkout({
               <b>{model.title}</b>
               <small>{model.type} · Permanent access</small>
             </span>
-            <strong>{sources[index] === "cash" ? <CashPrice vip={allocation.vipDiscount > 0} /> : "Covered"}</strong>
+            <strong>
+              {sources[index] === "cash" ? (
+                <CashPrice vip={hasLegacyBenefits && legacyBenefits.vipActive} />
+              ) : (
+                <AppliedPrice vip={hasLegacyBenefits && legacyBenefits.vipActive} />
+              )}
+            </strong>
           </div>
       ))}
       {!paymentOnly && (hasLegacyBenefits || user === "pro" || user === "max") && (
@@ -3882,6 +3914,7 @@ function Checkout({
           value={benefitChoices}
           onChange={onBenefitChoices}
           compact
+          singleSelection={models.length === 1}
         />
       )}
       {!paymentOnly && allocation.cashModels > 0 && allocation.vipDiscount > 0 ? (
@@ -3954,7 +3987,7 @@ function Checkout({
         <button className="primary-cta" onClick={() => onPay(paymentMethod)}>
           {allocation.cashAmount > 0
             ? `Continue to ${paymentMethod}`
-            : "Unlock model"}
+            : "Confirm unlock"}
         </button>
         <p className="legal-note">
           {allocation.cashAmount > 0
@@ -4045,6 +4078,7 @@ function SubscriptionCheckout({
           value={benefitChoices}
           onChange={onBenefitChoices}
           compact
+          singleSelection={unlockCount === 1}
         />
       )}
       {orderAllocation.cashAmount > 0 && (

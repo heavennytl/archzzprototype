@@ -2631,7 +2631,9 @@ body{font-family:"Helvetica Neue",Arial,sans-serif}
 }
 .checkout-modal .benefit-picker.compact{padding:12px;margin:12px 0;background:#faf9f7}
 .benefit-picker.compact .benefit-picker-head{margin:0}
-.benefit-summary{width:100%;min-height:48px;margin-top:10px;padding:9px 10px;display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #e3dfd9;background:#fff;color:#222;text-align:left}
+.benefit-summary{width:100%;min-height:48px;margin-top:10px;padding:9px 10px;display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:10px;border:1px solid #e3dfd9;background:#fff;color:#222;text-align:left}
+.benefit-summary-check{width:15px;height:15px;display:grid;place-items:center;border:1px solid #aaa;background:#fff;font-size:10px;font-style:normal;line-height:1}
+.benefit-summary-check.selected{border-color:#8f1818;background:#8f1818;color:#fff}
 .benefit-summary>span{display:flex;flex-direction:column;gap:4px}
 .benefit-summary b{font-size:13px;font-weight:600}
 .benefit-summary small{color:#777;font-size:11px}
@@ -2650,6 +2652,10 @@ body{font-family:"Helvetica Neue",Arial,sans-serif}
 .vip-price del{color:#999;font-size:.72em;font-weight:400}
 .vip-price b{color:#c90019;font:inherit;font-weight:700}
 .vip-price em{padding:2px 4px;background:#8f1818;color:#fff;font-size:8px;font-style:normal;font-weight:700;letter-spacing:.35px;line-height:1.2}
+.applied-price{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.applied-price del{color:#999;font-size:.78em;font-weight:400}
+.applied-price b{color:var(--red);font:inherit;font-weight:700}
+.applied-price em{padding:2px 4px;background:#8f1818;color:#fff;font-size:8px;font-style:normal;font-weight:700;letter-spacing:.35px;line-height:1.2}
 .pdp-page .asset-details .asset-grid{border-top:1px solid var(--line)}
 .pdp-page .buy-once-price .vip-price{margin:0;color:var(--red);font-size:34px;font-weight:700;letter-spacing:0;line-height:1}
 .pdp-page .buy-once-price .vip-price del{font-size:13px;font-weight:400}
