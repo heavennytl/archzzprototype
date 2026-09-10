@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArchzzWordmark, GalleryArrowIcon, Icon, SearchClearIcon } from "../components/brand";
-import { Auth, CancelRenewal, ImageSearch, LicenseSummary, Modal, SubscriptionSuccess, Success } from "../components/modals";
+import { Auth, CancelRenewal, FreeUnlockConfirm, ImageSearch, LicenseSummary, Modal, SubscriptionSuccess, Success } from "../components/modals";
 
 import {
   CART_LIMIT,
@@ -44,6 +44,12 @@ import type {
   UserMode,
 } from "../prototype/types";
 
+function withPlanCredits(choices: BenefitChoice[]) {
+  return choices.includes("planCredits")
+    ? choices
+    : [...choices, "planCredits" as const];
+}
+
 export default function Prototype() {
   const [page, setPage] = useState<Page>("home"),
     [query, setQuery] = useState(""),
@@ -62,6 +68,7 @@ export default function Prototype() {
       | "subscriptionSuccess"
       | "imageSearch"
       | "cancelRenewal"
+      | "freeUnlock"
       | "license"
       | "notification"
       | "success"
@@ -92,6 +99,7 @@ export default function Prototype() {
   const [autoRenew, setAutoRenew] = useState(true);
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
   const [resumingBillingId, setResumingBillingId] = useState<string | null>(null);
+  const [pendingFreeUnlockId, setPendingFreeUnlockId] = useState<number | null>(null);
   const [pendingAccountTab, setPendingAccountTab] =
     useState<AccountTab>("My Assets");
   const [pendingPlan, setPendingPlan] = useState<"pro" | "max" | null>(null),
@@ -189,9 +197,9 @@ export default function Prototype() {
       v.includes(id) ? v.filter((x) => x !== id) : [...v, id],
     );
   }
-  function addToCart(id: number): boolean {
+  function addToCart(id: number, confirmedFreeUnlock = false): boolean {
     const model = catalog.find((item) => item.id === id);
-    if (!model?.available || model.free || owned.includes(id)) {
+    if (!model?.available || owned.includes(id)) {
       showToast(
         model && !model.available
           ? "This item is unavailable"
@@ -203,6 +211,11 @@ export default function Prototype() {
       setSelected(model);
       setAuthIntent("cart");
       setModal("auth");
+      return false;
+    }
+    if (model.free && freeClaimed >= 3 && !confirmedFreeUnlock) {
+      setPendingFreeUnlockId(id);
+      setModal("freeUnlock");
       return false;
     }
     if (!cart.includes(id) && cart.length >= CART_LIMIT) {
@@ -227,8 +240,7 @@ export default function Prototype() {
       setAuthIntent("primary");
       return setModal("auth");
     }
-    if (model.free) {
-      if (freeClaimed >= 3) return showToast("Today’s free limit reached");
+    if (model.free && freeClaimed < 3) {
       setOwned((v) => [...v, model.id]);
       setFreeClaimed((v) => v + 1);
       addOrders([model.id], "Free download");
@@ -256,17 +268,19 @@ export default function Prototype() {
       setModal("none");
       showToast("Added to cart");
     } else if (authIntent === "cartCheckout") setModal("cartCheckout");
-    else if (authIntent === "primary" && selected.free) {
-      if (freeClaimed >= 3) {
-        setModal("none");
-        showToast("Today’s free limit reached");
-      } else {
-        setOwned((v) => (v.includes(selected.id) ? v : [...v, selected.id]));
-        setFreeClaimed((v) => v + 1);
-        addOrders([selected.id], "Free download");
-        setModal("none");
-        showToast("Download started. This model is now in My Assets.");
-      }
+    else if (
+      authIntent === "primary" &&
+      selected.free &&
+      freeClaimed < 3
+    ) {
+      setOwned((v) => (v.includes(selected.id) ? v : [...v, selected.id]));
+      setFreeClaimed((v) => v + 1);
+      addOrders([selected.id], "Free download");
+      setModal("none");
+      showToast("Download started. This model is now in My Assets.");
+    } else if (authIntent === "primary" && selected.free) {
+      setModal("none");
+      showToast("Today’s free downloads are used.");
     } else if (authIntent === "primary") setModal("checkout");
     else if (authIntent === "plan" && pendingPlan)
       setModal("subscriptionCheckout");
@@ -364,13 +378,17 @@ export default function Prototype() {
           ? selectedCartModels.map((model) => model.id)
           : [];
     const planTotal = pendingPlan === "max" ? 150 : 30;
+    const subscriptionBenefitChoices =
+      subscriptionResume === "cart"
+        ? withPlanCredits(benefitChoices)
+        : benefitChoices;
     const resumeAllocation = allocateBenefits(
       resumeIds.length,
       pendingPlan,
       legacyBenefits,
       upgrading ? planTotal - creditUsed : planTotal,
       hasLegacyBenefits,
-      benefitChoices,
+      subscriptionBenefitChoices,
     );
     setUser(pendingPlan);
     setCreditUsed(
@@ -547,6 +565,7 @@ export default function Prototype() {
       )}
       {page === "home" && (
         <Home
+          freeClaimed={freeClaimed}
           onSearch={search}
           onSearchFor={searchFor}
           query={query}
@@ -565,6 +584,7 @@ export default function Prototype() {
       {page === "home" && <ExtraCategories onSearchFor={searchFor} />}
       {page === "search" && (
         <SearchResults
+          freeClaimed={freeClaimed}
           query={query}
           onQuery={setQuery}
           onSearch={search}
@@ -597,13 +617,16 @@ export default function Prototype() {
           onPrimary={() => primaryAction(selected)}
           onCart={() => addToCart(selected.id)}
           onCartModel={addToCart}
+          onUnlockModel={primaryAction}
           onOpen={openModel}
           onPricing={() => navigate("pricing")}
+          onUpgrade={() => choosePlan("max", "pdp")}
           onLicense={() => setModal("license")}
         />
       )}
       {page === "free" && (
         <FreePage
+          user={user}
           claimed={freeClaimed}
           owned={owned}
           onOpen={openModel}
@@ -713,12 +736,28 @@ export default function Prototype() {
       {modal !== "none" && (
         <Modal onClose={() => {
           setModal("none");
+          setPendingFreeUnlockId(null);
           setResumingOrderId(null);
           setResumingBillingId(null);
         }}>
           {modal === "auth" && <Auth onContinue={authenticate} />}{" "}
           {modal === "notification" && selectedNotification && (
             <NotificationDetail notification={selectedNotification} />
+          )}{" "}
+          {modal === "freeUnlock" && pendingFreeUnlockId !== null && (
+            <FreeUnlockConfirm
+              onCancel={() => {
+                setPendingFreeUnlockId(null);
+                setModal("none");
+              }}
+              onConfirm={() => {
+                const added = addToCart(pendingFreeUnlockId, true);
+                if (added) {
+                  setPendingFreeUnlockId(null);
+                  setModal("none");
+                }
+              }}
+            />
           )}{" "}
           {modal === "checkout" && (
             <Checkout
@@ -773,7 +812,11 @@ export default function Prototype() {
               }
               legacyBenefits={legacyBenefits}
               hasLegacyBenefits={hasLegacyBenefits}
-              benefitChoices={benefitChoices}
+              benefitChoices={
+                subscriptionResume === "cart"
+                  ? withPlanCredits(benefitChoices)
+                  : benefitChoices
+              }
               onBenefitChoices={setBenefitChoices}
               allowBenefitSelection={subscriptionResume !== "cart"}
               onBack={subscriptionResume !== "none" ? () => {
@@ -860,6 +903,7 @@ export default function Prototype() {
           setBillingRecords((items) => items.filter((record) => record.seeded));
           setResumingOrderId(null);
           setResumingBillingId(null);
+          setPendingFreeUnlockId(null);
           setFavorites([]);
           setCart([]);
           setCartSelection([]);
@@ -1185,6 +1229,7 @@ function Header({
 }
 
 function Home({
+  freeClaimed,
   query,
   searchHistory,
   onQuery,
@@ -1199,6 +1244,7 @@ function Home({
   onCart,
   onImageSearch,
 }: {
+  freeClaimed: number;
   query: string;
   searchHistory: string[];
   onQuery: (v: string) => void;
@@ -1299,6 +1345,7 @@ function Home({
         </div>
       </section>
       <ModelSection
+        freeClaimed={freeClaimed}
         eyebrow=""
         title="Popular models"
         subtitle=""
@@ -1315,13 +1362,13 @@ function Home({
         <div>
           <span className="kicker light">TODAY’S FREE</span>
           <h2>
-            40 quality-checked models.
+            Quality-checked free models.
             <br />
             Choose any 3 today.
           </h2>
           <p>
-            A new selection of 20 SketchUp and 20 3ds Max models appears daily.
-            Your downloads stay in My Assets.
+            Browse the full SketchUp and 3ds Max free collection in a new order
+            each day. Your downloads stay in My Assets.
           </p>
           <button onClick={() => onNavigate("free")}>
             Explore today’s selection <Icon name="arrow" />
@@ -1362,6 +1409,7 @@ function Home({
 }
 
 function SearchResults({
+  freeClaimed,
   query,
   onQuery,
   onSearch,
@@ -1375,6 +1423,7 @@ function SearchResults({
   onCart,
   onImageSearch,
 }: {
+  freeClaimed: number;
   query: string;
   onQuery: (v: string) => void;
   onSearch: (e?: FormEvent) => void;
@@ -1539,6 +1588,7 @@ function SearchResults({
             <div className="result-grid">
               {visibleModels.map((model) => (
                 <ModelCard
+                  freeClaimed={freeClaimed}
                   key={model.id}
                   model={model}
                   onOpen={onOpen}
@@ -1591,8 +1641,10 @@ function ProductDetail({
   onPrimary,
   onCart,
   onCartModel,
+  onUnlockModel,
   onOpen,
   onPricing,
+  onUpgrade,
   onLicense,
 }: {
   model: Model;
@@ -1611,23 +1663,34 @@ function ProductDetail({
   onPrimary: () => void;
   onCart: () => void;
   onCartModel: (id: number) => boolean;
+  onUnlockModel: (model: Model) => void;
   onOpen: (m: Model) => void;
   onPricing: () => void;
+  onUpgrade: () => void;
   onLicense: () => void;
 }) {
   const [activeImage, setActiveImage] = useState(0);
   const subscribed = user === "pro" || user === "max",
     available = model.available;
+  const freeAvailable = model.free && freeClaimed < 3;
+  const showProCreditsExhausted =
+    available &&
+    user === "pro" &&
+    creditBalance <= 0 &&
+    !owned &&
+    !freeAvailable;
   const sameCategory = catalog.filter(
       (item) =>
         item.available &&
         item.id !== model.id &&
+        !allOwned.includes(item.id) &&
         item.category === model.category,
     ),
     sameSoftware = catalog.filter(
       (item) =>
         item.available &&
         item.id !== model.id &&
+        !allOwned.includes(item.id) &&
         item.type === model.type &&
         !sameCategory.some((relatedModel) => relatedModel.id === item.id),
     );
@@ -1636,10 +1699,10 @@ function ProductDetail({
     ? "Temporarily unavailable"
     : owned
       ? "Download again"
-      : model.free
-        ? freeClaimed >= 3
-          ? "Daily limit reached"
-          : "Free download"
+      : freeAvailable
+        ? "Free download"
+        : model.free && (!subscribed || creditBalance <= 0)
+          ? "Unlock · $1.99"
         : subscribed && creditBalance > 0
           ? "Use 1 credit"
           : user === "pro"
@@ -1751,7 +1814,7 @@ function ProductDetail({
             </div>
             <h1>{model.title}</h1>
           </div>
-          <div className={`decision-row ${model.free ? "free-only" : ""}`}>
+          <div className={`decision-row ${freeAvailable ? "free-only" : ""}`}>
             <div className="buy-once-price">
               <div className="access-license-row">
                 <span className={model.free ? "access-label free" : "access-label paid"}>
@@ -1762,8 +1825,13 @@ function ProductDetail({
                 </button>
               </div>
               <strong>{model.free ? "Free" : "$1.99"}</strong>
+              {model.free && !freeAvailable && !owned && (
+                <small className="free-limit-note">
+                  Today’s free downloads are used · unlock another with a credit or $1.99
+                </small>
+              )}
             </div>
-            {!model.free && <div className="membership-decision">
+            {!freeAvailable && <div className="membership-decision">
               {subscribed ? (
                 <>
                   <span>YOUR PLAN</span>
@@ -1788,7 +1856,7 @@ function ProductDetail({
               )}
             </div>}
           </div>
-          {hasLegacyBenefits && !model.free && (
+          {hasLegacyBenefits && !freeAvailable && (
             <div className="pdp-legacy-note">
               <b>Legacy benefits available</b>
               <span>Choose at checkout · expiry dates shown</span>
@@ -1822,33 +1890,46 @@ function ProductDetail({
               </span>
             </div>
           )}
-          <div className="pdp-actions">
-            <button
-              className={`primary-cta ${model.free || owned ? "download-primary" : ""}`}
-              onClick={onPrimary}
-              disabled={!available || (model.free && !owned && freeClaimed >= 3)}
-            >
-              {primaryLabel}
-            </button>
-            {available && !model.free && !owned && (
-              <button
-                className={`cart-cta pdp-cart-icon-cta ${inCart ? "added" : ""}`}
-                onClick={onCart}
-                disabled={inCart}
-                aria-label={inCart ? "Added to cart" : "Add to cart"}
-                title={inCart ? "Added to cart" : "Add to cart"}
-              >
-                {inCart ? (
-                  <span className="added-check" aria-hidden="true" />
-                ) : (
-                  <img src="/cart-card.svg" alt="" aria-hidden="true" />
-                )}
+          {showProCreditsExhausted ? (
+            <div className="pdp-credit-exhausted">
+              <p>Your Pro credits are used up.</p>
+              <button className="primary-cta" onClick={onUpgrade}>
+                Upgrade to Max
               </button>
-            )}
-          </div>
+              <button className="buy-once-cta" onClick={onPrimary}>
+                Unlock · $1.99
+              </button>
+            </div>
+          ) : (
+            <div className="pdp-actions">
+              <button
+                className={`primary-cta ${freeAvailable || owned ? "download-primary" : ""}`}
+                onClick={onPrimary}
+                disabled={!available}
+              >
+                {primaryLabel}
+              </button>
+              {available && !freeAvailable && !owned && (
+                <button
+                  className={`cart-cta pdp-cart-icon-cta ${inCart ? "added" : ""}`}
+                  onClick={onCart}
+                  disabled={inCart}
+                  aria-label={inCart ? "Added to cart" : "Add to cart"}
+                  title={inCart ? "Added to cart" : "Add to cart"}
+                >
+                  {inCart ? (
+                    <span className="added-check" aria-hidden="true" />
+                  ) : (
+                    <img src="/cart-card.svg" alt="" aria-hidden="true" />
+                  )}
+                </button>
+              )}
+            </div>
+          )}
         </aside>
       </div>
       <ModelSection
+        freeClaimed={freeClaimed}
         eyebrow=""
         title="Related models"
         subtitle=""
@@ -1859,23 +1940,54 @@ function ProductDetail({
         cart={cart}
         onFavorite={onFavoriteModel}
         onCart={onCartModel}
+        onFreeUnlock={onUnlockModel}
       />
     </main>
   );
 }
 
 function FreePage({
+  user,
   claimed,
   owned,
   onOpen,
   onClaim,
 }: {
+  user: UserMode;
   claimed: number;
   owned: number[];
   onOpen: (m: Model) => void;
   onClaim: (m: Model) => void;
 }) {
   const [tab, setTab] = useState<ModelType>("SketchUp");
+  const [ownershipFilter, setOwnershipFilter] = useState<
+    "all" | "owned" | "notOwned"
+  >("all");
+  const [visibleCount, setVisibleCount] = useState(40);
+  const utcDay = new Date().toISOString().slice(0, 10);
+  const dailyOrder = (id: number) => {
+    const value = `${utcDay}:${tab}:${id}`;
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  };
+  const filteredModels = todayFreeModels
+    .filter((item) => item.type === tab)
+    .filter((item) =>
+      ownershipFilter === "owned"
+        ? owned.includes(item.id)
+        : ownershipFilter === "notOwned"
+          ? !owned.includes(item.id)
+          : true,
+    )
+    .sort((a, b) => dailyOrder(a.id) - dailyOrder(b.id));
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setVisibleCount(40));
+    return () => cancelAnimationFrame(frame);
+  }, [tab, ownershipFilter]);
   return (
     <main className="free-page">
       <section className="free-hero">
@@ -1883,8 +1995,9 @@ function FreePage({
           <p className="kicker light">TODAY’S FREE · REFRESHES AT 00:00 UTC</p>
           <h1>Choose any 3 models today.</h1>
           <p>
-            Choose from 20 SketchUp and 20 3ds Max models. Downloaded models stay
-            in My Assets.
+            {claimed >= 3
+              ? "Your 3 free downloads are used. Unlock more with plan credits or $1.99 each."
+              : "Choose from the full SketchUp and 3ds Max collection. Downloaded models stay in My Assets."}
           </p>
         </div>
         <div className="free-counter">
@@ -1903,19 +2016,39 @@ function FreePage({
           className={tab === "SketchUp" ? "active" : ""}
           onClick={() => setTab("SketchUp")}
         >
-          SketchUp <span>20</span>
+          SketchUp
         </button>
         <button
           className={tab === "3ds Max" ? "active" : ""}
           onClick={() => setTab("3ds Max")}
         >
-          3ds Max <span>20</span>
+          3ds Max
         </button>
         <p>{claimed} of 3 downloads used today across both tabs</p>
       </div>
+      {user !== "guest" && (
+        <div
+          className="free-ownership-filter"
+          aria-label="Filter free models by ownership"
+        >
+          {(["all", "owned", "notOwned"] as const).map((value) => (
+            <button
+              key={value}
+              className={ownershipFilter === value ? "active" : ""}
+              onClick={() => setOwnershipFilter(value)}
+            >
+              {value === "all"
+                ? "All"
+                : value === "owned"
+                  ? "Owned"
+                  : "Not owned"}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="free-grid">
-        {todayFreeModels
-          .filter((item) => item.type === tab)
+        {filteredModels
+          .slice(0, visibleCount)
           .map((model) => (
             <div className="free-card" key={model.id}>
               <button className="free-image" onClick={() => onOpen(model)}>
@@ -1928,21 +2061,35 @@ function FreePage({
                   {model.renderer && <span>{model.renderer}</span>}
                   {model.qualityChecked && <span className="quality-tag"><Icon name="check" size={12} /></span>}
                 </div>
-                <button
-                  className="claim-button"
-                  disabled={claimed >= 3 && !owned.includes(model.id)}
-                  onClick={() => onClaim(model)}
-                >
-                  {owned.includes(model.id)
-                    ? "Download again"
-                    : claimed >= 3
-                      ? "Daily limit reached"
-                      : "Free download"}
-                </button>
+                <div className="free-card-access">
+                  <strong className="free-card-price">
+                    {owned.includes(model.id)
+                      ? "Owned"
+                      : "Free"}
+                  </strong>
+                  <button
+                    className="claim-button"
+                    onClick={() => onClaim(model)}
+                  >
+                    {owned.includes(model.id)
+                      ? "Download again"
+                      : claimed >= 3
+                        ? "Unlock · $1.99"
+                        : "Free download"}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
       </div>
+      <AutoLoadMore
+        hasMore={visibleCount < filteredModels.length}
+        onLoad={() =>
+          setVisibleCount((count) =>
+            Math.min(count + 20, filteredModels.length),
+          )
+        }
+      />
     </main>
   );
 }
@@ -2182,6 +2329,20 @@ function CartPage({
       hasLegacyBenefits,
       benefitChoices,
     ),
+    allocationWithPlanCredits = allocateBenefits(
+      selectedItems.length,
+      user,
+      legacyBenefits,
+      creditBalance,
+      hasLegacyBenefits,
+      benefitChoices.includes("planCredits")
+        ? benefitChoices
+        : [...benefitChoices, "planCredits"],
+    ),
+    recommendMax =
+      user === "pro" &&
+      allocation.cashModels > 0 &&
+      allocationWithPlanCredits.cashModels > 0,
     legacyUsed =
       allocation.welcome +
       allocation.invitation +
@@ -2278,7 +2439,7 @@ function CartPage({
                 onChange={onBenefitChoices}
               />
             )}
-            {user === "pro" && allocation.cashModels > 0 && (
+            {recommendMax && (
               <div className="recommend-box upgrade-recommendation">
                 <span>RECOMMENDED</span>
                 <b>Upgrade to Max</b>
@@ -2874,6 +3035,7 @@ function AccountEmptyState({
 }
 
 function ModelSection({
+  freeClaimed,
   eyebrow,
   title,
   subtitle,
@@ -2884,8 +3046,10 @@ function ModelSection({
   cart,
   onFavorite,
   onCart,
+  onFreeUnlock,
   onAll,
 }: {
+  freeClaimed: number;
   eyebrow: string;
   title: string;
   subtitle: string;
@@ -2896,6 +3060,7 @@ function ModelSection({
   cart: number[];
   onFavorite: (id: number) => void;
   onCart: (id: number) => boolean;
+  onFreeUnlock?: (model: Model) => void;
   onAll?: () => void;
 }) {
   const paginated = title === "Related models",
@@ -2922,6 +3087,7 @@ function ModelSection({
       <div className="home-model-grid">
         {visibleItems.map((model) => (
           <ModelCard
+            freeClaimed={freeClaimed}
             key={model.id}
             model={model}
             onOpen={onOpen}
@@ -2930,6 +3096,7 @@ function ModelSection({
             inCart={cart.includes(model.id)}
             onFavorite={onFavorite}
             onCart={onCart}
+            onFreeUnlock={onFreeUnlock}
           />
         ))}
       </div>
@@ -2971,6 +3138,7 @@ function SectionHeading({
   );
 }
 function ModelCard({
+  freeClaimed,
   model,
   onOpen,
   favorite,
@@ -2978,7 +3146,9 @@ function ModelCard({
   inCart,
   onFavorite,
   onCart,
+  onFreeUnlock,
 }: {
+  freeClaimed: number;
   model: Model;
   onOpen: (m: Model) => void;
   favorite: boolean;
@@ -2986,10 +3156,13 @@ function ModelCard({
   inCart: boolean;
   onFavorite: (id: number) => void;
   onCart: (id: number) => boolean;
+  onFreeUnlock?: (model: Model) => void;
 }) {
   const unavailable = !model.available,
-    purchasable = !owned && !model.free && !unavailable,
-    freeAction = !owned && model.free && !unavailable,
+    freeAvailable = model.free && freeClaimed < 3,
+    freeLocked = model.free && !freeAvailable,
+    purchasable = !owned && !freeAvailable && !unavailable,
+    freeAction = !owned && freeAvailable && !unavailable,
     saves = 180 + model.id * 39 + (favorite ? 1 : 0);
   return (
     <article className={unavailable ? "model-card unavailable" : "model-card"}>
@@ -3047,15 +3220,21 @@ function ModelCard({
                   ? "owned-card-action download-icon-action"
                   : inCart
                     ? "purchase-card-action cart-icon-action added"
-                  : purchasable
+                    : freeLocked
+                      ? "purchase-card-action free-unlock-action"
+                    : purchasable
                     ? "purchase-card-action cart-icon-action"
-                    : freeAction
-                      ? "purchase-card-action download-icon-action"
-                    : ""
+                  : freeAction
+                      ? onFreeUnlock
+                        ? "purchase-card-action free-unlock-action"
+                        : "purchase-card-action download-icon-action"
+                      : ""
               }
               onClick={() => {
                 if (purchasable) {
                   if (!inCart) onCart(model.id);
+                } else if (freeAction && onFreeUnlock) {
+                  onFreeUnlock(model);
                 } else onOpen(model);
               }}
               disabled={inCart}
@@ -3064,23 +3243,29 @@ function ModelCard({
                   ? "Download again"
                   : unavailable
                     ? "View unavailable item"
-                    : model.free
+                    : freeAvailable
                       ? "View free model"
                   : inCart
                     ? "Added to cart"
-                    : "Add to cart"
+                    : model.free
+                      ? "Unlock this free model"
+                      : "Add to cart"
               }
             >
-              {owned || freeAction ? (
+              {owned || (freeAction && !onFreeUnlock) ? (
                 <img src="/download-card.svg" alt="" aria-hidden="true" />
               ) : inCart ? (
                 <span className="added-check" aria-hidden="true" />
+              ) : freeLocked ? (
+                <span>Unlock</span>
+              ) : freeAction && onFreeUnlock ? (
+                <span>Unlock</span>
               ) : purchasable ? (
                 <img src="/cart-card.svg" alt="" aria-hidden="true" />
               ) : (
                 <Icon
                   name={
-                    model.free
+                    freeAvailable
                       ? "download"
                       : unavailable
                         ? "arrow"
@@ -3090,8 +3275,12 @@ function ModelCard({
                 />
               )}
               {owned && <span>Again</span>}
-              {purchasable && <span>{inCart ? "Added" : "Add"}</span>}
-              {freeAction && <span>Free</span>}
+              {purchasable && !freeLocked && (
+                <span>
+                  {inCart ? "Added" : model.free ? "Unlock" : "Add"}
+                </span>
+              )}
+              {freeAction && !onFreeUnlock && <span>Free</span>}
             </button>
           </div>
         </div>
@@ -3346,6 +3535,20 @@ function Checkout({
       hasLegacyBenefits,
       benefitChoices,
     ),
+    allocationWithPlanCredits = allocateBenefits(
+      models.length,
+      user,
+      legacyBenefits,
+      planBalance,
+      hasLegacyBenefits,
+      benefitChoices.includes("planCredits")
+        ? benefitChoices
+        : [...benefitChoices, "planCredits"],
+    ),
+    recommendMax =
+      user === "pro" &&
+      allocation.cashModels > 0 &&
+      allocationWithPlanCredits.cashModels > 0,
     sources = allocationSources(allocation),
     cashUnitPrice = allocation.cashModels
       ? allocation.cashAmount / allocation.cashModels
@@ -3386,7 +3589,7 @@ function Checkout({
         <span>Due today</span>
         <strong>${allocation.cashAmount.toFixed(2)}</strong>
       </div>
-      {!paymentOnly && user === "pro" && allocation.cashModels > 0 && (
+      {!paymentOnly && recommendMax && (
         <div className="checkout-upgrade-option">
           <span>RECOMMENDED</span>
           <b>Upgrade to Max</b>
@@ -3565,7 +3768,7 @@ function SubscriptionCheckout({
         <small>Processed by Antom</small>
       </label>
       <div className="renewal-note">
-        Renews monthly at ${renewalPrice.toFixed(2)} · Cancel anytime
+        Renews monthly at ${renewalPrice.toFixed(2)} until cancelled.
       </div>
       <button className="primary-cta" onClick={() => onPay(paymentMethod)}>
         Continue to {paymentMethod}

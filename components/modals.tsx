@@ -61,6 +61,31 @@ export function CancelRenewal({ onKeep, onConfirm }: { onKeep: () => void; onCon
   );
 }
 
+export function FreeUnlockConfirm({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="confirm-modal">
+      <p className="kicker">DAILY FREE LIMIT</p>
+      <h2>Add this model to cart?</h2>
+      <p>
+        Your 3 free downloads are used. Pay with available benefits, credits,
+        or $1.99.
+      </p>
+      <button className="primary-cta" onClick={onConfirm}>
+        Add to cart
+      </button>
+      <button className="text-button" onClick={onCancel}>
+        Not now
+      </button>
+    </div>
+  );
+}
+
 export function LicenseSummary({ onFullTerms }: { onFullTerms: () => void }) {
   return (
     <div className="license-modal">

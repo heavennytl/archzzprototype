@@ -68,6 +68,14 @@ footer{padding:56px 4.4vw 45px;display:grid;grid-template-columns:1.7fr repeat(4
 .card-software-tags .quality-tag{width:23px;padding:0;border-color:#a9cdb9;background:#eff7f2;color:var(--green)}
 .model-copy>.card-software-tags{margin-bottom:2px}
 .free-card .card-software-tags{margin:7px 0 10px}
+.free-ownership-filter{padding-top:18px;display:flex;gap:8px}
+.free-ownership-filter button{min-height:34px;padding:0 16px;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:11px}
+.free-ownership-filter button.active{border-color:var(--ink);background:var(--ink);color:#fff}
+.free-card-access{min-height:38px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.free-card-price{margin:0;display:block;font-size:14px;white-space:nowrap}
+.free-card-access .claim-button{width:auto;min-width:112px;padding:0 16px;flex:0 0 auto}
+.model-card .model-copy .model-bottom .card-actions .free-unlock-action{width:auto;min-width:70px;height:28px;padding:0 13px;border:1px solid #222;border-radius:15px;background:#fff;color:#222;font-size:11px}
+.model-card .model-copy .model-bottom .card-actions .free-unlock-action:hover{background:#222;color:#fff}
 .account-card-tags{margin:8px 11px 0}
 .account-card-tags+button{margin-top:10px}
 
@@ -2217,6 +2225,13 @@ body{font-family:"Helvetica Neue",Arial,sans-serif}
 /* Free PDP is a quality trial, without subscription upsell */
 .pdp-page .decision-row.free-only{grid-template-columns:1fr}
 .pdp-page .decision-row.free-only .buy-once-price{align-items:flex-start;border-right:0}
+.pdp-page .free-limit-note{margin-top:3px;color:#777;font-size:11px;line-height:1.35}
+.pdp-credit-exhausted{margin-top:auto;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;border:1px solid var(--line);background:#f5f5f3}
+.pdp-credit-exhausted p{grid-column:1/-1;margin:0 0 2px;color:#777;font-size:12px;line-height:1.4}
+.pdp-credit-exhausted .primary-cta,.pdp-credit-exhausted .buy-once-cta{min-height:48px;padding:0 16px;font-size:13px;font-weight:600}
+.pdp-credit-exhausted .buy-once-cta{border:1px solid #222;background:#fff;color:#222}
+.pdp-credit-exhausted .buy-once-cta:hover{background:#222;color:#fff}
+@media(max-width:780px){.pdp-credit-exhausted{margin-top:12px;grid-template-columns:1fr}.pdp-credit-exhausted p{grid-column:auto}}
 
 /* Stable column alignment for My Orders > Model access */
 .order-history article{grid-template-columns:minmax(300px,1.55fr) minmax(140px,.68fr) 120px minmax(210px,1fr) 138px;column-gap:22px;align-items:center}

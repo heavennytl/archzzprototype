@@ -23,14 +23,16 @@ export const collections = [
 ];
 
 const qualityCheckedModels = models.filter((model) => model.available && model.qualityChecked);
-export const todayFreeModels: Model[] = Array.from({ length: 40 }, (_, index) => {
-  const type: ModelType = index < 20 ? "SketchUp" : "3ds Max";
+export const todayFreeModels: Model[] = Array.from({ length: 1000 }, (_, index) => {
+  const type: ModelType = index < 500 ? "SketchUp" : "3ds Max";
   const matching = qualityCheckedModels.filter((model) => model.type === type);
-  const source = matching[index % matching.length];
-  return { ...source, id: 100 + index, free: true, title: `${source.title} ${String(index + 1).padStart(2, "0")}` };
+  const typeIndex = index % 500;
+  const source = matching[typeIndex % matching.length];
+  return { ...source, id: 100 + index, free: true, title: `${source.title} ${String(typeIndex + 1).padStart(3, "0")}` };
 });
 
-export const catalog = [...models, ...todayFreeModels];
+// Keep the 1,000-item Free Models demo pool separate from general-search fixtures.
+export const catalog = [...models, ...todayFreeModels.slice(0, 40)];
 
 export const infoPages: Record<InfoKey, InfoPageContent> = {
   about: { eyebrow: "COMPANY INFO", title: "About ARCHZZ", body: ["ARCHZZ provides production-ready 3D assets for architecture, interiors and landscape design, with clear compatibility and file details."] },
