@@ -97,7 +97,7 @@ export function entitlementLabel(
           ? "Legacy Download Credit"
           : source === "planCredits"
             ? `${user === "max" ? "Max" : "Pro"} credit`
-            : "Buy once";
+            : "—";
 }
 
 export function formatTransactionDate(date = new Date()) {

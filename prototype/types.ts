@@ -61,13 +61,18 @@ export type TransactionStatus =
   | "Refund processing"
   | "Refunded";
 
+export type PaymentChannel = "PayPal" | "Antom" | "DANA" | "GCash" | "TNG";
+
 export type OrderRecord = {
   id: string;
   orderId?: string;
   modelId: number;
+  modelIds?: number[];
+  benefitModelCount?: number;
+  cashModelCount?: number;
   date: string;
   access: string;
-  payment?: "PayPal" | "Antom" | "DANA" | "—";
+  payment?: PaymentChannel | "—";
   amount?: string;
   seeded?: boolean;
   status?: TransactionStatus;
@@ -78,7 +83,7 @@ export type BillingRecord = {
   title: string;
   date: string;
   amount: string;
-  channel: "PayPal" | "Antom" | "DANA";
+  channel: PaymentChannel;
   status: TransactionStatus;
   kind: "Subscription" | "Legacy VIP" | "Legacy credits";
   seeded?: boolean;

@@ -42,6 +42,7 @@ import type {
   NotificationRecord,
   OrderRecord,
   Page,
+  PaymentChannel,
   UserMode,
 } from "../prototype/types";
 
@@ -319,7 +320,7 @@ export default function Prototype() {
   }
   function completePurchase(
     ids = [selected.id],
-    channel: OrderRecord["payment"] = "PayPal",
+    channel: PaymentChannel = "PayPal",
   ) {
     const subscribed = user === "pro" || user === "max",
       balance = subscribed && !renewalRetrying ? (user === "max" ? 150 : 30) - creditUsed : 0,
@@ -384,9 +385,10 @@ export default function Prototype() {
     setModal("success");
   }
   function completePendingPurchase(order: OrderRecord) {
-    const orderModel = catalog.find((model) => model.id === order.modelId);
+    const orderModelIds = order.modelIds?.length ? order.modelIds : [order.modelId];
+    const orderModel = catalog.find((model) => model.id === orderModelIds[0]);
     if (!orderModel) return;
-    setOwned((items) => Array.from(new Set([...items, order.modelId])));
+    setOwned((items) => Array.from(new Set([...items, ...orderModelIds])));
     setOrders((items) =>
       items.map((item) =>
         item.id === order.id
@@ -395,10 +397,12 @@ export default function Prototype() {
       ),
     );
     setResumingOrderId(null);
-    setSuccessCount(1);
+    setSuccessCount(orderModelIds.length);
     setSuccessNotice({
       title: "Purchase complete",
-      message: `${orderModel.title} is ready in My Assets.`,
+      message: orderModelIds.length > 1
+        ? `${orderModelIds.length} models are ready in My Assets.`
+        : `${orderModel.title} is ready in My Assets.`,
     });
     setModal("success");
   }
@@ -425,7 +429,7 @@ export default function Prototype() {
       setModal("subscriptionCheckout");
     }
   }
-  function completeSubscription(channel: BillingRecord["channel"] = "PayPal") {
+  function completeSubscription(channel: "PayPal" = "PayPal") {
     if (!pendingPlan) return;
     const upgrading = user === "pro" && pendingPlan === "max";
     const resumeIds =
@@ -583,9 +587,6 @@ export default function Prototype() {
     : billingRecords.filter((record) => !record.seeded);
   const resumingOrder = resumingOrderId
     ? orders.find((order) => order.id === resumingOrderId) || null
-    : null;
-  const resumingBilling = resumingBillingId
-    ? billingRecords.find((record) => record.id === resumingBillingId) || null
     : null;
   return (
     <div className="app-shell">
@@ -926,7 +927,6 @@ export default function Prototype() {
                 setSubscriptionResume("none");
               } : undefined}
               backLabel={subscriptionResume === "cart" ? "Back to cart" : "Back to one-time purchase"}
-              lockedPaymentMethod={resumingBilling?.channel}
               onPay={completeSubscription}
             />
           )}{" "}
@@ -2458,7 +2458,9 @@ function BenefitPicker({
   ];
   const appliedSummary = appliedBenefits.length
     ? `${appliedBenefits[0].label}${appliedBenefits.length > 1 ? ` · +${appliedBenefits.length - 1} more` : ""}`
-    : "Not applied";
+    : (user === "pro" || user === "max") && planBalance <= 0 && availableCount === 0
+      ? `${user === "max" ? "Max" : "Pro"} credits used up`
+      : "Not applied";
   const appliedCount = appliedBenefits.reduce(
     (total, item) => total + item.count,
     0,
@@ -2468,19 +2470,21 @@ function BenefitPicker({
       ? `${Math.max(0, planBalance - allocation.planCredits)} credits left`
       : appliedBenefits.length
         ? `${Math.max(0, availableCount - appliedBenefits.length)} other benefit ${Math.max(0, availableCount - appliedBenefits.length) === 1 ? "type" : "types"} available`
-        : `${availableCount} benefit ${availableCount === 1 ? "type" : "types"} available`;
+        : (user === "pro" || user === "max") && planBalance <= 0 && availableCount === 0
+          ? "0 remaining this billing period"
+          : `${availableCount} benefit ${availableCount === 1 ? "type" : "types"} available`;
 
   return (
     <div className={`benefit-picker${compact ? " compact" : ""}`}>
       <div className="benefit-picker-head">
         <b>Benefits</b>
-        {compact ? (
+        {compact && availableCount > 0 ? (
           <button type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
             {expanded ? "Done" : "Change"}
           </button>
         ) : null}
       </div>
-      {compact && !expanded && (
+      {compact && !expanded && availableCount > 0 && (
         <button type="button" className="benefit-summary" onClick={() => setExpanded(true)}>
           <i className={appliedCount ? "benefit-summary-check selected" : "benefit-summary-check"} aria-hidden="true">
             {appliedCount ? "✓" : ""}
@@ -2488,6 +2492,13 @@ function BenefitPicker({
           <span><b>{appliedSummary}</b><small>{availabilitySummary}</small></span>
           <strong>{appliedCount ? `${appliedCount} benefit${appliedCount === 1 ? "" : "s"} applied` : `$${allocation.cashAmount.toFixed(2)} due`}</strong>
         </button>
+      )}
+      {compact && !expanded && availableCount === 0 && (
+        <div className="benefit-summary benefit-summary-static">
+          <i className="benefit-summary-check exhausted" aria-hidden="true">!</i>
+          <span><b>{appliedSummary}</b><small>{availabilitySummary}</small></span>
+          <strong>${allocation.cashAmount.toFixed(2)} due</strong>
+        </div>
       )}
       {(!compact || expanded) && hasLegacyBenefits && legacyBenefitMeta.map((item) => {
         const balance = legacyBenefits[item.balanceKey];
@@ -3111,7 +3122,9 @@ function OrderHistory({
       </div>
       <div className="order-history-head">
         <span>
-          {view === "models" ? orders.length : billingRecords.length}{" "}
+          {view === "models"
+            ? orders.reduce((total, order) => total + (order.modelIds?.length || 1), 0)
+            : billingRecords.length}{" "}
           {view === "models" ? "models" : "transactions"}
         </span>
         <small>
@@ -3123,6 +3136,7 @@ function OrderHistory({
       {view === "models" && <div className="order-list-scroll">{orders.map((order) => {
         const model = models.find((item) => item.id === order.modelId);
         if (!model) return null;
+        const modelCount = order.modelIds?.length || 1;
         const parentOrderId = order.orderId || order.id;
         const siblingItems = orders.filter(
           (item) => (item.orderId || item.id) === parentOrderId,
@@ -3134,10 +3148,11 @@ function OrderHistory({
               <img src={model.image} alt="" />
               <span>
                 <small>
-                  {model.type}
-                  {model.renderer ? ` · ${model.renderer}` : ""}
+                  {modelCount > 1
+                    ? `${order.benefitModelCount || 0} credits · ${order.cashModelCount || 0} paid`
+                    : `${model.type}${model.renderer ? ` · ${model.renderer}` : ""}`}
                 </small>
-                <b>{model.title}</b>
+                <b>{modelCount > 1 ? `${modelCount} models` : model.title}</b>
               </span>
             </button>
             <div>
@@ -3802,23 +3817,32 @@ function PendingPaymentCheckout({
   onPay: () => void;
 }) {
   const channel = order.payment && order.payment !== "—" ? order.payment : "PayPal";
+  const modelCount = order.modelIds?.length || 1;
   return (
     <div className="checkout-modal">
       <h2>Continue payment</h2>
       <div className="checkout-item">
         <img src={model.image} alt="" />
         <span>
-          <b>{model.title}</b>
-          <small>{model.type} · Permanent access</small>
+          <b>{modelCount > 1 ? `${modelCount} models` : model.title}</b>
+          <small>{modelCount > 1 ? `${order.benefitModelCount || 0} credits + ${order.cashModelCount || 0} paid · Permanent access` : `${model.type} · Permanent access`}</small>
         </span>
         <strong>{order.amount || "$1.99"}</strong>
       </div>
+      {modelCount > 1 && (
+        <div className="checkout-lines">
+          <span><b>Benefits reserved</b><strong>{order.access}</strong></span>
+          <span><b>Cash payment</b><strong>{order.cashModelCount} models · {order.amount}</strong></span>
+        </div>
+      )}
       <p className="payment-section-title">Payment method</p>
       <div className="payment-options-grid one-time-payment-grid locked-payment-grid">
         <div className="payment-option selected-payment-option">
           {channel === "PayPal" && <img className="payment-logo paypal-logo" src="/paypal-logo.png" alt="PayPal" />}
           {channel === "Antom" && <img className="payment-logo antom-logo" src="/antom-logo.png" alt="Antom" />}
           {channel === "DANA" && <span className="dana-wordmark">DANA</span>}
+          {channel === "GCash" && <span className="gcash-wordmark">GCash</span>}
+          {channel === "TNG" && <span className="tng-wordmark">TNG</span>}
           <b>{channel}</b>
         </div>
       </div>
@@ -3855,13 +3879,13 @@ function Checkout({
   hasLegacyBenefits: boolean;
   benefitChoices: BenefitChoice[];
   onBenefitChoices: (choices: BenefitChoice[]) => void;
-  onPay: (channel: "PayPal" | "Antom" | "DANA") => void;
+  onPay: (channel: PaymentChannel) => void;
   onUpgrade: () => void;
   onChoosePlan: (plan: "pro" | "max") => void;
   onPricing: () => void;
   paymentOnly?: boolean;
 }) {
-  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "Antom" | "DANA">("PayPal");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentChannel>("PayPal");
   const allocation = allocateBenefits(
       models.length,
       user,
@@ -3976,6 +4000,26 @@ function Checkout({
             <span className="dana-wordmark">DANA</span>
             <b>DANA</b>
           </label>
+          <label className="payment-option">
+            <input
+              type="radio"
+              name="payment-channel"
+              checked={paymentMethod === "GCash"}
+              onChange={() => setPaymentMethod("GCash")}
+            />
+            <span className="gcash-wordmark">GCash</span>
+            <b>GCash</b>
+          </label>
+          <label className="payment-option">
+            <input
+              type="radio"
+              name="payment-channel"
+              checked={paymentMethod === "TNG"}
+              onChange={() => setPaymentMethod("TNG")}
+            />
+            <span className="tng-wordmark">TNG</span>
+            <b>TNG</b>
+          </label>
           </div>
         </>
       )}
@@ -4011,7 +4055,6 @@ function SubscriptionCheckout({
   allowBenefitSelection = true,
   onBack,
   backLabel = "Back to one-time purchase",
-  lockedPaymentMethod,
   onPay,
 }: {
   plan: "pro" | "max";
@@ -4025,10 +4068,8 @@ function SubscriptionCheckout({
   allowBenefitSelection?: boolean;
   onBack?: () => void;
   backLabel?: string;
-  lockedPaymentMethod?: BillingRecord["channel"];
-  onPay: (channel: "PayPal" | "Antom" | "DANA") => void;
+  onPay: (channel: "PayPal") => void;
 }) {
-  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "Antom" | "DANA">(lockedPaymentMethod || "PayPal");
   const planName = plan === "max" ? "Max" : "Pro";
   const price = upgrading ? 35 : plan === "max" ? 49.99 : 14.99;
   const renewalPrice = plan === "max" ? 49.99 : 14.99;
@@ -4084,42 +4125,21 @@ function SubscriptionCheckout({
       {orderAllocation.cashAmount > 0 && (
         <div className="checkout-lines">
           <span><b>{planName} plan</b><strong>${price.toFixed(2)}</strong></span>
-          <span><b>Models not covered by credits</b><strong>${orderAllocation.cashAmount.toFixed(2)}</strong></span>
+          <span><b>Additional models ({orderAllocation.cashModels})</b><strong>${orderAllocation.cashAmount.toFixed(2)}</strong></span>
         </div>
       )}
       <p className="payment-section-title">Subscription payment method</p>
       <div className="payment-options-grid subscription-payment-grid">
-      {(!lockedPaymentMethod || lockedPaymentMethod === "PayPal") && <label className="payment-option">
+      <label className="payment-option">
         <input
           type="radio"
           name="subscription-payment"
-          checked={paymentMethod === "PayPal"}
-          onChange={() => !lockedPaymentMethod && setPaymentMethod("PayPal")}
+          checked
+          readOnly
         />
         <img className="payment-logo paypal-logo" src="/paypal-logo.png" alt="PayPal" />
         <b>PayPal</b>
-      </label>}
-      {(!lockedPaymentMethod || lockedPaymentMethod === "Antom") && <label className="payment-option">
-        <input
-          type="radio"
-          name="subscription-payment"
-          checked={paymentMethod === "Antom"}
-          onChange={() => !lockedPaymentMethod && setPaymentMethod("Antom")}
-        />
-        <img className="payment-logo antom-logo" src="/antom-logo.png" alt="Antom" />
-        <b>Antom</b>
-      </label>}
-      {(!lockedPaymentMethod || lockedPaymentMethod === "DANA") && <label className="payment-option">
-        <input
-          type="radio"
-          name="subscription-payment"
-          checked={paymentMethod === "DANA"}
-          onChange={() => !lockedPaymentMethod && setPaymentMethod("DANA")}
-        />
-        <span className="dana-wordmark">DANA</span>
-        <b>DANA</b>
-        <small>Processed by Antom</small>
-      </label>}
+      </label>
       </div>
       <div className="renewal-note">
         Renews monthly at ${renewalPrice.toFixed(2)} until cancelled.
@@ -4129,8 +4149,8 @@ function SubscriptionCheckout({
           <span>Due today</span>
           <strong>${dueToday.toFixed(2)}</strong>
         </div>
-        <button className="primary-cta" onClick={() => onPay(paymentMethod)}>
-          Continue to {paymentMethod}
+        <button className="primary-cta" onClick={() => onPay("PayPal")}>
+          Continue to PayPal
         </button>
         <p className="legal-note">By continuing, you agree to recurring billing and the Terms.</p>
       </div>

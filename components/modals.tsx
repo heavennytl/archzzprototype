@@ -69,19 +69,21 @@ export function FreeUnlockConfirm({
   onConfirm: () => void;
 }) {
   return (
-    <div className="confirm-modal">
+    <div className="confirm-modal free-unlock-confirm">
       <p className="kicker">DAILY FREE LIMIT</p>
       <h2>Continue unlocking this model?</h2>
       <p>
         Today’s 3 free downloads are used. Continue with available benefits,
         credits, or $1.99.
       </p>
-      <button className="primary-cta" onClick={onConfirm}>
-        Continue
-      </button>
-      <button className="text-button" onClick={onCancel}>
-        Cancel
-      </button>
+      <div className="confirm-actions">
+        <button className="text-button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-cta" onClick={onConfirm}>
+          Continue
+        </button>
+      </div>
     </div>
   );
 }
